@@ -1,0 +1,264 @@
+{
+  "rules": [
+    {
+      "id": "RULE_CPF_RETRACTATION",
+      "description": "Le délai de rétractation CPF doit être respecté",
+      "trigger": "TO_EN_COURS",
+      "severity": "BLOCKING",
+      "message": "Délai légal de 11 jours non respecté pour financement CPF.",
+      "logic": {
+        "field": "financeur.type",
+        "operator": "EQUALS",
+        "value": "CPF",
+        "additionalCheck": {
+          "field": "retractationRespectee",
+          "operator": "IS_FALSE"
+        }
+      }
+    },
+    {
+      "id": "RULE_CERTIF_ACTIVE",
+      "description": "La certification doit être active au RNCP/RS",
+      "trigger": "TO_ACTIF",
+      "severity": "BLOCKING",
+      "message": "Certification caduque ou inactive.",
+      "logic": {
+        "field": "certification.statut",
+        "operator": "NOT_EQUALS",
+        "value": "ACTIVE"
+      }
+    },
+    {
+      "id": "RULE_ASSIDUITE_INCOMPLETE",
+      "description": "Assiduité incomplète sans justificatif",
+      "trigger": "TO_CLOTURE",
+      "severity": "BLOCKING",
+      "message": "Assiduité incomplète (< 100%). Validation manuelle requise.",
+      "logic": {
+        "field": "tauxAssiduite",
+        "operator": "LT",
+        "value": 100,
+        "additionalCheck": {
+          "field": "hasJustificatifAbsence",
+          "operator": "IS_FALSE"
+        }
+      }
+    },
+    {
+      "id": "RULE_ASSIDUITE_FAIBLE_JUSTIFIEE",
+      "description": "Assiduité faible mais justifiée - Warning seulement",
+      "trigger": "TO_CLOTURE",
+      "severity": "WARNING",
+      "message": "Assiduité faible (< 100%) mais justificatif fourni. Validation possible.",
+      "logic": {
+        "field": "tauxAssiduite",
+        "operator": "LT",
+        "value": 100,
+        "additionalCheck": {
+          "field": "hasJustificatifAbsence",
+          "operator": "IS_TRUE"
+        }
+      }
+    },
+    {
+      "id": "RULE_CONTRAT_SIGNE",
+      "description": "Le contrat doit être signé avant le démarrage",
+      "trigger": "TO_EN_COURS",
+      "severity": "BLOCKING",
+      "message": "Contrat non signé. Démarrage impossible.",
+      "logic": {
+        "field": "hasContratSigne",
+        "operator": "IS_FALSE"
+      }
+    },
+    {
+      "id": "RULE_FINANCEMENT_ACCORDE",
+      "description": "Le financement doit être validé avant le démarrage",
+      "trigger": "TO_EN_COURS",
+      "severity": "BLOCKING",
+      "message": "Accord de financement non reçu.",
+      "logic": {
+        "field": "financeurAccord",
+        "operator": "IS_FALSE"
+      }
+    },
+    {
+      "id": "RULE_PREREQUIS_VALIDES",
+      "description": "Les prérequis doivent être validés pour l'admission",
+      "trigger": "TO_ADMIS",
+      "severity": "BLOCKING",
+      "message": "Prérequis non validés. Admission impossible.",
+      "logic": {
+        "field": "hasPrerequis",
+        "operator": "IS_FALSE"
+      }
+    },
+    {
+      "id": "RULE_TEST_POSITIONNEMENT",
+      "description": "Le test de positionnement doit être complété",
+      "trigger": "TO_ADMIS",
+      "severity": "WARNING",
+      "message": "Test de positionnement non complété.",
+      "logic": {
+        "field": "testPositionnementComplete",
+        "operator": "IS_FALSE"
+      }
+    },
+    {
+      "id": "RULE_DECLARATION_PSH",
+      "description": "La déclaration PSH doit être renseignée",
+      "trigger": "TO_ADMIS",
+      "severity": "BLOCKING",
+      "message": "Déclaration Handicap (PSH) non renseignée.",
+      "logic": {
+        "field": "declarationPSH",
+        "operator": "EQUALS",
+        "value": null
+      }
+    },
+    {
+      "id": "RULE_CERTIFICAT_POUR_FACTURE",
+      "description": "Le certificat de réalisation est requis pour facturer",
+      "trigger": "TO_FACTURE",
+      "severity": "BLOCKING",
+      "message": "Certificat de réalisation non généré. Facturation bloquée.",
+      "logic": {
+        "field": "certificatGenere",
+        "operator": "IS_FALSE"
+      }
+    },
+    {
+      "id": "RULE_CFA_SITE_UAI_REQUIRED",
+      "description": "[CFA] Le site doit avoir un code UAI valide",
+      "trigger": "SITE_CREATION",
+      "severity": "BLOCKING",
+      "context": "CFA",
+      "message": "Un site CFA doit obligatoirement avoir un code UAI (Unité Administrative Immatriculée).",
+      "logic": {
+        "field": "organization.type",
+        "operator": "EQUALS",
+        "value": "CFA",
+        "additionalCheck": {
+          "field": "site.uaiCode",
+          "operator": "EQUALS",
+          "value": null
+        }
+      }
+    },
+    {
+      "id": "RULE_CFA_ENTREPRISE_OBLIGATOIRE",
+      "description": "[CFA] L'entreprise employeur est obligatoire",
+      "trigger": "TO_ADMIS",
+      "severity": "BLOCKING",
+      "context": "CFA",
+      "message": "Un dossier CFA (apprentissage) doit avoir une entreprise employeur associée.",
+      "logic": {
+        "field": "isCFA",
+        "operator": "IS_TRUE",
+        "additionalCheck": {
+          "field": "hasCompany",
+          "operator": "IS_FALSE"
+        }
+      }
+    },
+    {
+      "id": "RULE_CFA_TUTEUR_OBLIGATOIRE",
+      "description": "[CFA] Le maître d'apprentissage est obligatoire",
+      "trigger": "TO_ADMIS",
+      "severity": "BLOCKING",
+      "context": "CFA",
+      "message": "Un dossier CFA doit avoir un maître d'apprentissage désigné.",
+      "logic": {
+        "field": "isCFA",
+        "operator": "IS_TRUE",
+        "additionalCheck": {
+          "field": "hasTutor",
+          "operator": "IS_FALSE"
+        }
+      }
+    },
+    {
+      "id": "RULE_CFA_CONTRAT_APPRENTISSAGE",
+      "description": "[CFA] Le contrat d'apprentissage doit être enregistré",
+      "trigger": "TO_EN_COURS",
+      "severity": "BLOCKING",
+      "context": "CFA",
+      "message": "Le contrat d'apprentissage doit être enregistré auprès de l'OPCO avant le démarrage.",
+      "logic": {
+        "field": "isCFA",
+        "operator": "IS_TRUE",
+        "additionalCheck": {
+          "field": "contratApprentissageEnregistre",
+          "operator": "IS_FALSE"
+        }
+      }
+    },
+    {
+      "id": "RULE_CFA_FINANCEMENT_OPCO",
+      "description": "[CFA] Le financement doit être OPCO pour l'apprentissage",
+      "trigger": "TO_CONTRACTUALISE",
+      "severity": "WARNING",
+      "context": "CFA",
+      "message": "Les dossiers CFA sont généralement financés par l'OPCO. Vérifiez le type de financement.",
+      "logic": {
+        "field": "isCFA",
+        "operator": "IS_TRUE",
+        "additionalCheck": {
+          "field": "financeur.type",
+          "operator": "NOT_EQUALS",
+          "value": "OPCO"
+        }
+      }
+    },
+    {
+      "id": "RULE_CFA_DUREE_MINIMUM",
+      "description": "[CFA] La durée minimale de formation est de 400h/an",
+      "trigger": "TO_ACTIF",
+      "severity": "WARNING",
+      "context": "CFA",
+      "message": "La durée de formation en CFA doit être d'au moins 400 heures par an (Code du travail L.6211-2).",
+      "logic": {
+        "field": "isCFA",
+        "operator": "IS_TRUE",
+        "additionalCheck": {
+          "field": "dureeFormationAnnuelle",
+          "operator": "LT",
+          "value": 400
+        }
+      }
+    },
+    {
+      "id": "RULE_CFA_CERTIFICATION_RNCP",
+      "description": "[CFA] La formation doit mener à une certification RNCP",
+      "trigger": "TO_ACTIF",
+      "severity": "BLOCKING",
+      "context": "CFA",
+      "message": "Les formations en apprentissage doivent mener à une certification RNCP (Art. L.6211-1 Code du travail).",
+      "logic": {
+        "field": "isCFA",
+        "operator": "IS_TRUE",
+        "additionalCheck": {
+          "field": "hasCertificationRNCP",
+          "operator": "IS_FALSE"
+        }
+      }
+    },
+    {
+      "id": "RULE_CFA_AGE_APPRENTI",
+      "description": "[CFA] L'apprenti doit avoir entre 16 et 29 ans",
+      "trigger": "TO_ADMIS",
+      "severity": "WARNING",
+      "context": "CFA",
+      "message": "L'âge de l'apprenti doit être entre 16 et 29 ans (sauf dérogations). Vérification recommandée.",
+      "logic": {
+        "field": "isCFA",
+        "operator": "IS_TRUE",
+        "additionalCheck": {
+          "field": "ageApprenti",
+          "operator": "GT",
+          "value": 29
+        }
+      }
+    }
+  ]
+}
