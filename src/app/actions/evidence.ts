@@ -52,7 +52,7 @@ export async function addProof(
     // ========================================
     const dossier = await prisma.dossier.findUnique({
         where: { id: dossierId },
-        select: { id: true, stagiaireNom: true, stagiairePrenom: true },
+        select: { id: true, organizationId: true, stagiaireNom: true, stagiairePrenom: true },
     });
 
     if (!dossier) {
@@ -73,6 +73,7 @@ export async function addProof(
         data: {
             type,
             dossierId,
+            organizationId: dossier.organizationId,
             nomFichier: fakeFileName,
             cheminFichier: fakePath,
             mimeType: 'application/pdf',
@@ -91,6 +92,7 @@ export async function addProof(
     // ========================================
     await prisma.auditLog.create({
         data: {
+            organizationId: dossier.organizationId,
             entityType: 'Preuve',
             entityId: preuve.id,
             action: 'PROOF_UPLOAD',

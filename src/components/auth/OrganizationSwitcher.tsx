@@ -44,7 +44,7 @@ export default function OrganizationSwitcher() {
         id: session.user.organizationId,
         name: session.user.organizationName,
         type: session.user.organizationType,
-        siteName: session.user.siteName,
+        siteName: (session.user as any).siteName,
     };
 
     const otherMemberships = session.user.memberships.filter(
@@ -169,11 +169,10 @@ export default function OrganizationSwitcher() {
                                         </div>
                                         <div className="flex items-center gap-2 text-xs text-slate-400">
                                             <span>{roleLabel}</span>
-                                            {membership.siteName && (
-                                                <>
-                                                    <span>·</span>
-                                                    <span>📍 {membership.siteName}</span>
-                                                </>
+                                            {(membership as any).siteName && (
+                                                <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-0.5">
+                                                    <span>📍 {(membership as any).siteName}</span>
+                                                </div>
                                             )}
                                         </div>
                                     </div>

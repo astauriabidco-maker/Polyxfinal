@@ -100,8 +100,8 @@ export async function POST(request: NextRequest) {
                 organizationId,
                 name: name.trim(),
                 address: address?.trim() || null,
-                city: city?.trim() || null,
-                postalCode: postalCode?.trim() || null,
+                city: city?.trim() || '',
+                zipCode: postalCode?.trim() || '',
                 uaiCode: uaiCode?.toUpperCase() || null,
                 isActive: true,
             },
@@ -114,12 +114,12 @@ export async function POST(request: NextRequest) {
                 userId: session.user.id!,
                 userRole: membership.role,
                 action: 'CREATE_SITE',
-                niveauAction: 'MODIFICATION',
+                niveauAction: 'EDITION',
                 entityType: 'Site',
                 entityId: site.id,
                 phase: 0, // Configuration
                 isForced: false,
-                previousState: null,
+                previousState: {},
                 newState: {
                     name: site.name,
                     uaiCode: site.uaiCode,
@@ -144,7 +144,7 @@ export async function POST(request: NextRequest) {
     }
 }
 
-// GET - Lister les sites d'une organisation
+// GET - Lister les sites d'une organisation ou de toutes les organisations
 export async function GET(request: NextRequest) {
     try {
         const session = await auth();
@@ -158,40 +158,67 @@ export async function GET(request: NextRequest) {
         const { searchParams } = new URL(request.url);
         const organizationId = searchParams.get('organizationId');
 
-        if (!organizationId) {
-            return NextResponse.json(
-                { error: 'organizationId requis' },
-                { status: 400 }
+        // Si organizationId fourni, filtrer par cette organisation
+        if (organizationId) {
+            // Vérifier l'accès
+            const membership = session.user.memberships?.find(
+                m => m.organizationId === organizationId
             );
+
+            if (!membership) {
+                return NextResponse.json(
+                    { error: 'Accès non autorisé' },
+                    { status: 403 }
+                );
+            }
+
+            // Récupérer les sites
+            // Si scope RESTRICTED, filtrer par siteAccess
+            let siteIds: string[] | undefined;
+            if (membership.scope === 'RESTRICTED' && membership.accessibleSites) {
+                siteIds = membership.accessibleSites.map(s => s.id);
+            }
+
+            const sites = await prisma.site.findMany({
+                where: {
+                    organizationId,
+                    isActive: true,
+                    ...(siteIds && { id: { in: siteIds } }),
+                },
+                orderBy: { name: 'asc' },
+                include: {
+                    organization: {
+                        select: { id: true, name: true, type: true },
+                    },
+                    _count: {
+                        select: { dossiers: true },
+                    },
+                },
+            });
+
+            return NextResponse.json({ sites });
         }
 
-        // Vérifier l'accès
-        const membership = session.user.memberships?.find(
-            m => m.organizationId === organizationId
-        );
+        // Sans organizationId, retourner tous les sites de toutes les organisations de l'utilisateur
+        const memberOrgIds = session.user.memberships?.map(m => m.organizationId) || [];
 
-        if (!membership) {
-            return NextResponse.json(
-                { error: 'Accès non autorisé' },
-                { status: 403 }
-            );
-        }
-
-        // Récupérer les sites
-        // Si scope RESTRICTED, filtrer par siteAccess
-        let siteIds: string[] | undefined;
-        if (membership.scope === 'RESTRICTED' && membership.accessibleSites) {
-            siteIds = membership.accessibleSites.map(s => s.siteId);
+        if (memberOrgIds.length === 0) {
+            return NextResponse.json({ sites: [] });
         }
 
         const sites = await prisma.site.findMany({
             where: {
-                organizationId,
+                organizationId: { in: memberOrgIds },
                 isActive: true,
-                ...(siteIds && { id: { in: siteIds } }),
             },
-            orderBy: { name: 'asc' },
+            orderBy: [
+                { organization: { name: 'asc' } },
+                { name: 'asc' },
+            ],
             include: {
+                organization: {
+                    select: { id: true, name: true, type: true },
+                },
                 _count: {
                     select: { dossiers: true },
                 },

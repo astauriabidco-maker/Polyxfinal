@@ -1,71 +1,94 @@
 /**
- * LOGIN PAGE - Authentification
- * ==============================
- * Page de connexion avec formulaire et boutons de test rapide.
+ * LOGIN PAGE - Authentification Professionnelle
+ * ===============================================
+ * Page de connexion avec useFormState + useFormStatus.
+ * Validation Zod côté client et serveur.
+ * Design premium dark mode.
  */
 
-import { signIn } from '@/auth';
-import { redirect } from 'next/navigation';
+'use client';
 
-// Test users for quick login (Multi-Tenant)
-const TEST_USERS = [
-    { email: 'admin@academy-pro.com', role: 'ADMIN', label: '🏢 Academy Pro', color: 'emerald' },
-    { email: 'pedago@academy-pro.com', role: 'RESP_PEDAGO', label: '👩‍🏫 Pedagogue', color: 'blue' },
-    { email: 'admin@cfa-avenir.com', role: 'ADMIN', label: '🏫 CFA Avenir', color: 'amber' },
-    { email: 'admin@starter-formation.com', role: 'ADMIN', label: '🌱 Starter', color: 'purple' },
-];
+import { useFormState, useFormStatus } from 'react-dom';
+import { authenticate, type AuthActionState } from '@/lib/actions/auth';
+import Link from 'next/link';
 
-export default async function LoginPage({
-    searchParams,
-}: {
-    searchParams: { error?: string; callbackUrl?: string };
-}) {
-    const error = searchParams.error;
-    const callbackUrl = searchParams.callbackUrl || '/dashboard';
+// ─── Submit Button with Loading State ─────────────────────────
 
-    async function handleCredentialsLogin(formData: FormData) {
-        'use server';
-
-        const email = formData.get('email') as string;
-        const password = formData.get('password') as string;
-
-        try {
-            await signIn('credentials', {
-                email,
-                password,
-                redirectTo: callbackUrl,
-            });
-        } catch (err) {
-            // NextAuth throws NEXT_REDIRECT on success, so we need to rethrow
-            throw err;
-        }
-    }
-
-    async function handleQuickLogin(formData: FormData) {
-        'use server';
-
-        const email = formData.get('email') as string;
-
-        try {
-            await signIn('credentials', {
-                email,
-                password: 'password123',
-                redirectTo: '/dashboard',
-            });
-        } catch (err) {
-            throw err;
-        }
-    }
+function SubmitButton() {
+    const { pending } = useFormStatus();
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 flex items-center justify-center p-4">
-            <div className="w-full max-w-md">
-                {/* Logo / Title */}
+        <button
+            type="submit"
+            disabled={pending}
+            aria-disabled={pending}
+            className="w-full py-3 px-4 rounded-xl bg-gradient-to-r from-emerald-600 to-emerald-500 
+                     hover:from-emerald-500 hover:to-emerald-400 
+                     text-white font-semibold transition-all duration-200 
+                     focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:ring-offset-2 focus:ring-offset-slate-900
+                     disabled:opacity-60 disabled:cursor-not-allowed
+                     flex items-center justify-center gap-2"
+        >
+            {pending ? (
+                <>
+                    <svg
+                        className="animate-spin h-5 w-5 text-white"
+                        xmlns="http://www.w3.org/2000/svg"
+                        fill="none"
+                        viewBox="0 0 24 24"
+                    >
+                        <circle
+                            className="opacity-25"
+                            cx="12"
+                            cy="12"
+                            r="10"
+                            stroke="currentColor"
+                            strokeWidth="4"
+                        />
+                        <path
+                            className="opacity-75"
+                            fill="currentColor"
+                            d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"
+                        />
+                    </svg>
+                    <span>Connexion en cours...</span>
+                </>
+            ) : (
+                <>
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 16l-4-4m0 0l4-4m-4 4h14m-5 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h7a3 3 0 013 3v1" />
+                    </svg>
+                    <span>Se connecter</span>
+                </>
+            )}
+        </button>
+    );
+}
+
+// ─── Login Page ───────────────────────────────────────────────
+
+const initialState: AuthActionState = { error: null, success: false };
+
+export default function LoginPage() {
+    const [state, formAction] = useFormState(authenticate, initialState);
+
+    return (
+        <div className="min-h-screen bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 flex items-center justify-center p-4">
+            {/* Background decorative elements */}
+            <div className="fixed inset-0 overflow-hidden pointer-events-none">
+                <div className="absolute -top-40 -right-40 w-80 h-80 bg-emerald-500/5 rounded-full blur-3xl" />
+                <div className="absolute -bottom-40 -left-40 w-80 h-80 bg-blue-500/5 rounded-full blur-3xl" />
+            </div>
+
+            <div className="w-full max-w-md relative z-10">
+                {/* Logo & Header */}
                 <div className="text-center mb-8">
-                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 mb-4">
-                        <span className="text-3xl">📚</span>
+                    <div className="inline-flex items-center justify-center w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500 to-emerald-700 mb-4 shadow-lg shadow-emerald-500/20">
+                        <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+                        </svg>
                     </div>
-                    <h1 className="text-2xl font-bold text-white">
+                    <h1 className="text-2xl font-bold text-white tracking-tight">
                         Polyx ERP Formation
                     </h1>
                     <p className="text-sm text-slate-400 mt-1">
@@ -74,111 +97,89 @@ export default async function LoginPage({
                 </div>
 
                 {/* Error Message */}
-                {error && (
-                    <div className="mb-6 px-4 py-3 rounded-lg bg-red-950/50 border border-red-800/50">
-                        <p className="text-sm text-red-400 text-center">
-                            {error === 'forbidden'
-                                ? '🚫 Accès refusé à cette page'
-                                : '❌ Email ou mot de passe incorrect'}
+                {state?.error && (
+                    <div className="mb-6 px-4 py-3 rounded-xl bg-red-950/50 border border-red-800/50 flex items-center gap-3">
+                        <svg className="w-5 h-5 text-red-400 shrink-0" fill="currentColor" viewBox="0 0 20 20">
+                            <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        <p className="text-sm text-red-400">
+                            {state.error}
                         </p>
                     </div>
                 )}
 
                 {/* Login Form Card */}
-                <div className="bg-slate-800/60 backdrop-blur-sm rounded-2xl border border-slate-700/50 p-6 mb-6">
-                    <h2 className="text-lg font-semibold text-white mb-4">
+                <div className="bg-slate-800/60 backdrop-blur-xl rounded-2xl border border-slate-700/50 p-8 shadow-2xl shadow-black/20">
+                    <h2 className="text-lg font-semibold text-white mb-6 flex items-center gap-2">
+                        <svg className="w-5 h-5 text-emerald-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+                        </svg>
                         Connexion
                     </h2>
 
-                    <form action={handleCredentialsLogin} className="space-y-4">
+                    <form action={formAction} className="space-y-5">
+                        {/* Email */}
                         <div>
-                            <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-1.5">
-                                Email
+                            <label htmlFor="email" className="block text-sm font-medium text-slate-300 mb-2">
+                                Adresse email
                             </label>
                             <input
                                 id="email"
                                 name="email"
                                 type="email"
+                                autoComplete="email"
                                 required
                                 placeholder="votre@email.com"
-                                className="w-full px-4 py-2.5 rounded-lg bg-slate-900/50 border border-slate-700/50 
-                                         text-white placeholder-slate-500 focus:outline-none focus:ring-2 
-                                         focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
+                                className="w-full px-4 py-3 rounded-xl bg-slate-900/60 border border-slate-700/50 
+                                         text-white placeholder-slate-500 
+                                         focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 
+                                         transition-all duration-200"
                             />
                         </div>
 
+                        {/* Password */}
                         <div>
-                            <label htmlFor="password" className="block text-sm font-medium text-slate-300 mb-1.5">
-                                Mot de passe
-                            </label>
+                            <div className="flex items-center justify-between mb-2">
+                                <label htmlFor="password" className="block text-sm font-medium text-slate-300">
+                                    Mot de passe
+                                </label>
+                                <Link
+                                    href="#"
+                                    className="text-xs text-emerald-400 hover:text-emerald-300 transition-colors"
+                                >
+                                    Mot de passe oublié ?
+                                </Link>
+                            </div>
                             <input
                                 id="password"
                                 name="password"
                                 type="password"
+                                autoComplete="current-password"
                                 required
+                                minLength={6}
                                 placeholder="••••••••"
-                                className="w-full px-4 py-2.5 rounded-lg bg-slate-900/50 border border-slate-700/50 
-                                         text-white placeholder-slate-500 focus:outline-none focus:ring-2 
-                                         focus:ring-emerald-500/50 focus:border-emerald-500/50 transition-all"
+                                className="w-full px-4 py-3 rounded-xl bg-slate-900/60 border border-slate-700/50 
+                                         text-white placeholder-slate-500 
+                                         focus:outline-none focus:ring-2 focus:ring-emerald-500/50 focus:border-emerald-500/50 
+                                         transition-all duration-200"
                             />
                         </div>
 
-                        <button
-                            type="submit"
-                            className="w-full py-2.5 px-4 rounded-lg bg-emerald-600 hover:bg-emerald-500 
-                                     text-white font-medium transition-all duration-200 
-                                     focus:outline-none focus:ring-2 focus:ring-emerald-500/50"
-                        >
-                            Se connecter
-                        </button>
+                        {/* Submit */}
+                        <SubmitButton />
                     </form>
                 </div>
 
-                {/* Quick Login (Dev Only) */}
-                <div className="bg-slate-800/40 backdrop-blur-sm rounded-2xl border border-slate-700/50 p-6">
-                    <div className="flex items-center gap-2 mb-4">
-                        <span className="text-amber-500">⚡</span>
-                        <h3 className="text-sm font-semibold text-slate-300">
-                            Connexion Rapide (Dev)
-                        </h3>
-                    </div>
-                    <p className="text-xs text-slate-500 mb-4">
-                        Mot de passe : <code className="px-1.5 py-0.5 rounded bg-slate-700 text-slate-300">password123</code>
-                    </p>
-
-                    <div className="grid grid-cols-2 gap-2">
-                        {TEST_USERS.map((user) => (
-                            <form key={user.email} action={handleQuickLogin}>
-                                <input type="hidden" name="email" value={user.email} />
-                                <button
-                                    type="submit"
-                                    className={`w-full py-2 px-3 rounded-lg text-xs font-medium transition-all
-                                              bg-${user.color}-950/50 border border-${user.color}-800/50 
-                                              text-${user.color}-400 hover:bg-${user.color}-900/50`}
-                                    style={{
-                                        backgroundColor: user.color === 'emerald' ? 'rgba(6, 78, 59, 0.5)' :
-                                            user.color === 'blue' ? 'rgba(30, 58, 138, 0.5)' :
-                                                user.color === 'amber' ? 'rgba(120, 53, 15, 0.5)' :
-                                                    'rgba(88, 28, 135, 0.5)',
-                                        borderColor: user.color === 'emerald' ? 'rgba(6, 95, 70, 0.5)' :
-                                            user.color === 'blue' ? 'rgba(30, 64, 175, 0.5)' :
-                                                user.color === 'amber' ? 'rgba(146, 64, 14, 0.5)' :
-                                                    'rgba(107, 33, 168, 0.5)',
-                                        color: user.color === 'emerald' ? '#34d399' :
-                                            user.color === 'blue' ? '#60a5fa' :
-                                                user.color === 'amber' ? '#fbbf24' :
-                                                    '#c084fc',
-                                    }}
-                                >
-                                    {user.label}
-                                </button>
-                            </form>
-                        ))}
-                    </div>
+                {/* Security Badge */}
+                <div className="mt-6 flex items-center justify-center gap-2 text-xs text-slate-500">
+                    <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M5 9V7a5 5 0 0110 0v2a2 2 0 012 2v5a2 2 0 01-2 2H5a2 2 0 01-2-2v-5a2 2 0 012-2zm8-2v2H7V7a3 3 0 016 0z" clipRule="evenodd" />
+                    </svg>
+                    <span>Connexion sécurisée • Chiffrement TLS</span>
                 </div>
 
                 {/* Footer */}
-                <p className="text-center text-xs text-slate-600 mt-6">
+                <p className="text-center text-xs text-slate-600 mt-4">
                     © 2024 Polyx Formation • Conformité Qualiopi
                 </p>
             </div>

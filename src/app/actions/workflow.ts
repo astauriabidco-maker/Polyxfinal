@@ -70,7 +70,7 @@ export async function promoteDossier(
     // ========================================
     const dossier = await prisma.dossier.findUnique({
         where: { id: dossierId },
-        select: { id: true, status: true, stagiaireNom: true, stagiairePrenom: true },
+        select: { id: true, organizationId: true, status: true, stagiaireNom: true, stagiairePrenom: true },
     });
 
     if (!dossier) {
@@ -124,6 +124,7 @@ export async function promoteDossier(
     // ========================================
     await prisma.auditLog.create({
         data: {
+            organizationId: dossier.organizationId,
             entityType: 'Dossier',
             entityId: dossierId,
             action: 'STATUS_CHANGE',

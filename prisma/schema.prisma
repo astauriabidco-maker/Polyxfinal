@@ -1,10 +1,3 @@
-// ===========================================================================
-// ERP FORMATION - SCHÉMA PRISMA "COMPLIANCE BY DESIGN"
-// ===========================================================================
-// Ce schéma implémente les contraintes du CdCF et de la matrice RBAC.
-// Toute modification doit être validée par le Responsable Qualité.
-// ===========================================================================
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -14,195 +7,76 @@ datasource db {
   url      = env("DATABASE_URL")
 }
 
-// ===========================================================================
-// ENUMS - Alignés sur rbac_matrix.md et cdcf_functional.md
-// ===========================================================================
-
-/// Rôles système RBAC (5 rôles définis dans rbac_matrix.md)
-enum Role {
-  ADMIN        // Super Admin : DSI ou Gérant (Accès technique total mais tracé)
-  RESP_PEDAGO  // Responsable Pédagogique : Garant contenu et certification Qualiopi
-  RESP_ADMIN   // Responsable Admin/Financier : Facturation, contrats, financeurs
-  REF_QUALITE  // Référent Qualité : Processus, réclamations, veto
-  FORMAT       // Formateur : Accès terrain restreint à ses sessions
-}
-
-/// Statut de phase (Machine à état pour Compliance Gates)
-enum PhaseStatus {
-  BROUILLON              // En cours de création
-  EN_ATTENTE_VALIDATION  // Soumis pour validation
-  ACTIF                  // Validé et opérationnel
-  SUSPENDU               // Temporairement bloqué
-  CLOTURE                // Terminé avec succès
-  ABANDONNE              // Arrêt définitif (motif requis)
-}
-
-/// Type de financeur (L.6353-1)
-enum TypeFinanceur {
-  CPF          // Mon Compte Formation (Délai rétractation 11j)
-  OPCO         // Opérateur de Compétences
-  ENTREPRISE   // Plan de formation entreprise
-  PERSONNEL    // Financement personnel
-  MIXTE        // Combinaison de financements
-}
-
-/// Type de contrat
-enum TypeContrat {
-  CONVENTION   // B2B (Entreprise/OPCO)
-  CONTRAT      // B2C (Particulier)
-}
-
-/// Type de preuve (Documents Qualiopi)
-enum TypePreuve {
-  PROGRAMME              // Programme de formation daté
-  CGV                    // Conditions Générales de Vente
-  TEST_POSITIONNEMENT    // Test de positionnement rempli
-  ANALYSE_BESOIN         // Analyse du besoin
-  CONTRAT_SIGNE          // Contrat/Convention signé(e)
-  ACCORD_FINANCEMENT     // Accord de prise en charge
-  EMARGEMENT             // Feuille d'émargement
-  RELEVE_CONNEXION       // Logs FOAD
-  TRAVAUX_STAGIAIRE      // Productions du stagiaire
-  CERTIFICAT_REALISATION // Certificat de réalisation
-  EVALUATION_CHAUD       // Évaluation à chaud
-  FACTURE                // Facture finale
-  AVENANT                // Avenant au contrat
-  JUSTIFICATIF_ABSENCE   // Justificatif d'absence validé
-}
-
-/// Motif d'abandon (Machine à état Phase 4)
-enum MotifAbandon {
-  FORCE_MAJEURE     // Maladie, décès, etc. (Justificatif requis)
-  VOLONTAIRE        // Décision du stagiaire
-  EXCLUSION         // Décision de l'organisme
-  DEFAUT_PAIEMENT   // Non-paiement
-}
-
-/// Statut certification RNCP/RS
-enum StatutCertification {
-  ACTIVE    // Certification valide
-  INACTIVE  // Certification expirée
-  EN_COURS  // Demande en cours
-}
-
-/// Modalité de formation
-enum Modalite {
-  PRESENTIEL  // Formation en présentiel
-  FOAD        // Formation à distance
-  MIXTE       // Blended learning
-}
-
-/// Niveau d'action pour AuditLog
-enum NiveauAction {
-  LECTURE      // Consultation (👁️)
-  EDITION      // Modification (✏️)
-  VALIDATION   // Compliance Gate (✅)
-  FORCAGE      // Contournement règle (🛡️)
-}
-
-/// Scope d'accès aux sites dans une organisation
-enum MembershipScope {
-  GLOBAL      // Accès à TOUS les sites de l'organisation
-  RESTRICTED  // Accès limité aux sites de la relation siteAccess
-}
-
-/// Type d'organisme de formation (SaaS Multi-Tenant)
-enum OrganizationType {
-  OF_STANDARD  // Organisme de Formation classique
-  CFA          // Centre de Formation d'Apprentis (Contrat d'apprentissage)
-  BILAN        // Centre de Bilan de Compétences
-  VAE          // Centre de Validation des Acquis de l'Expérience
-}
-
-// ===========================================================================
-// MULTI-TENANT : ORGANISATION (Cloison SaaS)
-// ===========================================================================
-
 /// Organisation (OF/CFA) - Tenant principal pour l'isolation des données
 model Organization {
-  id                  String            @id @default(cuid())
-  
-  // Identité légale
-  name                String
-  siret               String            @unique
-  type                OrganizationType  @default(OF_STANDARD)
-  responsableName     String?           // Nom du dirigeant ou responsable pédagogique
-  
-  // Réglementaire
-  ndaNumber           String?           // Numéro de Déclaration d'Activité (L.6351-1)
-  qualiopiCertified   Boolean           @default(false)
-  qualiopiExpiry      DateTime?         // Date d'expiration certification Qualiopi
-  
-  // Branding / Identité Visuelle
-  logoUrl             String?           // Logo de l'organisation
-  signatureUrl        String?           // Signature électronique
-  cachetUrl           String?           // Cachet de l'organisation
-  
-  // Documents Obligatoires
-  cgvUrl              String?           // Conditions Générales de Vente (PDF)
-  livretAccueilUrl    String?           // Livret d'accueil stagiaires (PDF)
-  reglementInterieurUrl String?         // Règlement intérieur (PDF)
-  
-  // Statut
-  isActive            Boolean           @default(true)
-  
-  // Timestamps
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
-  
-  // Relations (Tenant Isolation)
-  members             Membership[]      // Utilisateurs membres de l'org
-  sites               Site[]            // Multi-Site (Campus)
-  programmes          Programme[]
-  sessions            Session[]
-  dossiers            Dossier[]
-  financeurs          Financeur[]
-  certifications      Certification[]
-  reclamations        Reclamation[]
-  companies           Company[]
-  auditLogs           AuditLog[]
-  preuves             Preuve[]
-  
+  id                    String               @id @default(cuid())
+  name                  String
+  siret                 String               @unique
+  type                  OrganizationType     @default(OF_STANDARD)
+  ndaNumber             String?
+  qualiopiCertified     Boolean              @default(false)
+  qualiopiExpiry        DateTime?
+  logoUrl               String?
+  isActive              Boolean              @default(true)
+  createdAt             DateTime             @default(now())
+  updatedAt             DateTime             @updatedAt
+  cachetUrl             String?
+  cgvUrl                String?
+  leadFeeRate           Float?
+  livretAccueilUrl      String?
+  networkType           NetworkType?
+  parentId              String?
+  reglementInterieurUrl String?
+  responsableName       String?
+  royaltyRate           Float?
+  signatureUrl          String?
+  auditLogs             AuditLog[]
+  campaigns             Campaign[]
+  certifications        Certification[]
+  companies             Company[]
+  documentTemplates    DocumentTemplate[]
+  dossiers              Dossier[]
+  financeurs            Financeur[]
+  franchiseCandidates   FranchiseCandidate[]
+  leads                 Lead[]
+  members               Membership[]
+  networkSettings       NetworkSettings?
+  parent                Organization?        @relation("OrganizationHierarchy", fields: [parentId], references: [id])
+  children              Organization[]       @relation("OrganizationHierarchy")
+  partners              Partner[]
+  preuves               Preuve[]
+  programmes            Programme[]
+  reclamations          Reclamation[]
+  sessions              Session[]
+  sites                 Site[]
+  territories           Territory[]
+
   @@index([siret])
   @@index([type])
   @@index([isActive])
+  @@index([networkType])
+  @@index([parentId])
 }
 
 /// Site / Campus (Lieu d'exécution de formation)
 model Site {
-  id              String        @id @default(cuid())
-  
-  // Parent Organization (Tenant)
-  organizationId  String
-  organization    Organization  @relation(fields: [organizationId], references: [id])
-  
-  // Identité
-  name            String        // Ex: "Campus Paris", "Siège Lyon"
-  isHeadquarters  Boolean       @default(false) // Site principal (siège)
-  
-  // Adresse
-  address         String?
-  city            String
-  zipCode         String
-  
-  // Réglementaire CFA (Code UAI - Obligatoire si org.type = CFA)
-  uaiCode         String?       // Ex: "0750001A" (8 caractères)
-  
-  // Réglementaire OF (5 derniers chiffres SIRET - NIC)
-  siretNic        String?       // Ex: "00012"
-  
-  // Statut
-  isActive        Boolean       @default(true)
-  
-  // Timestamps
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
-  // Relations
-  membershipSiteAccess MembershipSiteAccess[]  // Accès des membres à ce site
-  sessions             Session[]
+  id                   String                 @id @default(cuid())
+  organizationId       String
+  name                 String
+  isHeadquarters       Boolean                @default(false)
+  address              String?
+  city                 String
+  zipCode              String
+  uaiCode              String?
+  siretNic             String?
+  isActive             Boolean                @default(true)
+  createdAt            DateTime               @default(now())
+  updatedAt            DateTime               @updatedAt
   dossiers             Dossier[]
-  
+  membershipSiteAccess MembershipSiteAccess[]
+  sessions             Session[]
+  organization         Organization           @relation(fields: [organizationId], references: [id])
+
   @@unique([organizationId, name])
   @@index([organizationId])
   @@index([uaiCode])
@@ -211,99 +85,62 @@ model Site {
 
 /// Entreprise cliente (B2B / Employeur pour CFA)
 model Company {
-  id              String        @id @default(cuid())
-  
-  // Organisation parente (Tenant)
-  organizationId  String
-  organization    Organization  @relation(fields: [organizationId], references: [id])
-  
-  // Identité
-  raisonSociale   String
-  siret           String
-  
-  // Contact référent
-  contactNom      String?
-  contactEmail    String?
+  id               String       @id @default(cuid())
+  organizationId   String
+  raisonSociale    String
+  siret            String
+  contactNom       String?
+  contactEmail     String?
   contactTelephone String?
-  
-  // Adresse
-  adresse         String?
-  codePostal      String?
-  ville           String?
-  
-  // Timestamps
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
-  // Relations
-  dossiers        Dossier[]     // Apprentis de cette entreprise
-  
+  adresse          String?
+  codePostal       String?
+  ville            String?
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  dossiers         Dossier[]
+
   @@unique([organizationId, siret])
   @@index([organizationId])
 }
 
-// ===========================================================================
-// UTILISATEURS & RBAC (Multi-Membership)
-// ===========================================================================
-
 /// Utilisateur (agnostique - peut appartenir à plusieurs organisations)
 model User {
-  id            String   @id @default(cuid())
-  email         String   @unique
-  emailVerified DateTime?
-  passwordHash  String?
-  
-  // Profil (global, partagé entre orgs)
-  nom           String
-  prenom        String
-  telephone     String?
-  
-  // Statut global
-  isActive      Boolean  @default(true)
-  
-  // Timestamps
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-  
-  // Relations
-  memberships       Membership[]     // Organisations dont l'user est membre
+  id                String        @id @default(cuid())
+  email             String        @unique
+  emailVerified     DateTime?
+  passwordHash      String?
+  nom               String
+  prenom            String
+  telephone         String?
+  isActive          Boolean       @default(true)
+  createdAt         DateTime      @default(now())
+  updatedAt         DateTime      @updatedAt
   auditLogs         AuditLog[]
-  sessionsFormateur Session[]        @relation("SessionFormateur")
-  dossiersCreated   Dossier[]        @relation("DossierCreatedBy")
+  dossiersCreated   Dossier[]     @relation("DossierCreatedBy")
+  memberships       Membership[]
+  reclamationsOwned Reclamation[] @relation("ReclamationOwner")
+  sessionsFormateur Session[]     @relation("SessionFormateur")
   validationsGiven  Validation[]
-  reclamationsOwned Reclamation[]    @relation("ReclamationOwner")
-  
+  preuvesGenerated  Preuve[]      @relation("PreuveGenerePar")
+
   @@index([email])
 }
 
 /// Membership (relation User <-> Organization avec rôle et scope site)
 model Membership {
-  // Clé composite
   userId         String
-  user           User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  
   organizationId String
-  organization   Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  
-  // Rôle dans cette organisation
-  role           Role         @default(FORMAT)
-  
-  // Scope d'accès aux sites
-  scope          MembershipScope @default(GLOBAL)
-  
-  // Sites accessibles (Many-to-Many via table de liaison)
+  role           Role                   @default(FORMAT)
+  scope          MembershipScope        @default(GLOBAL)
+  lastAccessedAt DateTime               @default(now())
+  isActive       Boolean                @default(true)
+  createdAt      DateTime               @default(now())
+  updatedAt      DateTime               @updatedAt
+  organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
   siteAccess     MembershipSiteAccess[]
-  
-  // Tracking dernier accès (pour tri récent)
-  lastAccessedAt DateTime     @default(now())
-  
-  // Statut du membership
-  isActive       Boolean      @default(true)
-  
-  // Timestamps
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
-  
+
   @@id([userId, organizationId])
   @@index([userId])
   @@index([organizationId])
@@ -311,49 +148,31 @@ model Membership {
 
 /// Table de liaison Membership <-> Site (pour scope RESTRICTED)
 model MembershipSiteAccess {
-  // Référence vers Membership (clé composite)
-  membershipUserId  String
-  membershipOrgId   String
-  
-  // Référence vers Site
-  siteId            String
-  site              Site        @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  
-  // Relation vers Membership
-  membership        Membership  @relation(fields: [membershipUserId, membershipOrgId], references: [userId, organizationId], onDelete: Cascade)
-  
+  membershipUserId String
+  membershipOrgId  String
+  siteId           String
+  membership       Membership @relation(fields: [membershipUserId, membershipOrgId], references: [userId, organizationId], onDelete: Cascade)
+  site             Site       @relation(fields: [siteId], references: [id], onDelete: Cascade)
+
   @@id([membershipUserId, membershipOrgId, siteId])
   @@index([siteId])
 }
 
-// ===========================================================================
-// PHASE 1 : CATALOGUE & OFFRES
-// ===========================================================================
-
 /// Certification RNCP/RS (Check API France Compétences)
 model Certification {
   id              String              @id @default(cuid())
-  
-  // Tenant Isolation
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  
-  code            String  // Ex: RNCP12345 (unique par org)
+  code            String
   intitule        String
   statut          StatutCertification @default(ACTIVE)
   dateFinValidite DateTime?
-  
-  // Métadonnées API France Compétences
-  urlFicheFC      String?  // URL fiche France Compétences
+  urlFicheFC      String?
   lastCheckedAt   DateTime?
-  
-  // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
-  // Relations
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+  organizationId  String
+  organization    Organization        @relation(fields: [organizationId], references: [id])
   programmes      Programme[]
-  
+
   @@unique([organizationId, code])
   @@index([organizationId])
   @@index([statut])
@@ -361,53 +180,33 @@ model Certification {
 
 /// Programme de formation (Versionné)
 model Programme {
-  id                String        @id @default(cuid())
-  
-  // Tenant Isolation
-  organizationId    String
-  organization      Organization @relation(fields: [organizationId], references: [id])
-  
-  // Identifiant interne
-  reference         String  // Ex: FORM-2024-001 (unique par org)
-  
-  // Contenu obligatoire (sinon blocage publication)
-  intitule          String
-  objectifs         String        // Texte riche
-  prerequis         String        // Texte riche  
-  contenu           String        // Texte riche (Programme détaillé)
-  modalitesEval     String        // Modalités d'évaluation
-  moyensPedago      String        // Moyens pédagogiques
-  
-  // Accessibilité PSH
-  accessibilitePSH  String?
-  
-  // Paramètres
-  dureeHeures       Int
-  modalite          Modalite      @default(PRESENTIEL)
-  tarifHT           Decimal       @db.Decimal(10, 2)
-  tarifTTC          Decimal       @db.Decimal(10, 2)
-  
-  // Certification liée
-  certificationId   String?
-  certification     Certification? @relation(fields: [certificationId], references: [id])
-  
-  // Versionning (Snapshot à la signature)
-  version           Int           @default(1)
-  isPublished       Boolean       @default(false)
-  publishedAt       DateTime?
-  
-  // Statut
-  status            PhaseStatus   @default(BROUILLON)
-  
-  // Timestamps
-  createdAt         DateTime      @default(now())
-  updatedAt         DateTime      @updatedAt
-  
-  // Relations
-  sessions          Session[]
-  snapshots         ProgrammeSnapshot[]
-  preuves           Preuve[]
-  
+  id               String              @id @default(cuid())
+  reference        String
+  intitule         String
+  objectifs        String
+  prerequis        String
+  contenu          String
+  modalitesEval    String
+  moyensPedago     String
+  accessibilitePSH String?
+  dureeHeures      Int
+  modalite         Modalite            @default(PRESENTIEL)
+  tarifHT          Decimal             @db.Decimal(10, 2)
+  tarifTTC         Decimal             @db.Decimal(10, 2)
+  certificationId  String?
+  version          Int                 @default(1)
+  isPublished      Boolean             @default(false)
+  publishedAt      DateTime?
+  status           PhaseStatus         @default(BROUILLON)
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  organizationId   String
+  preuves          Preuve[]
+  certification    Certification?      @relation(fields: [certificationId], references: [id])
+  organization     Organization        @relation(fields: [organizationId], references: [id])
+  snapshots        ProgrammeSnapshot[]
+  sessions         Session[]
+
   @@unique([organizationId, reference])
   @@index([organizationId])
   @@index([status, isPublished])
@@ -415,66 +214,40 @@ model Programme {
 
 /// Snapshot immuable du programme (lié au contrat signé)
 model ProgrammeSnapshot {
-  id              String   @id @default(cuid())
+  id              String    @id @default(cuid())
   programmeId     String
-  programme       Programme @relation(fields: [programmeId], references: [id])
-  
   version         Int
-  contenuSnapshot Json     // Copie intégrale du programme à date
-  
-  createdAt       DateTime @default(now())
-  
-  // Relations
+  contenuSnapshot Json
+  createdAt       DateTime  @default(now())
   contrats        Contrat[]
-  
+  programme       Programme @relation(fields: [programmeId], references: [id])
+
   @@unique([programmeId, version])
   @@index([programmeId])
 }
 
-// ===========================================================================
-// SESSION DE FORMATION
-// ===========================================================================
-
 model Session {
-  id              String      @id @default(cuid())
-  
-  // Tenant Isolation
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  
-  // Site d'exécution (OBLIGATOIRE)
-  siteId          String
-  site            Site         @relation(fields: [siteId], references: [id])
-  
-  // Programme lié
-  programmeId     String
-  programme       Programme   @relation(fields: [programmeId], references: [id])
-  
-  // Planning
-  reference       String  // Ex: SESS-2024-001 (unique par org)
-  dateDebut       DateTime
-  dateFin         DateTime
-  lieuFormation   String?     // Adresse ou "FOAD"
-  
-  // Capacité
-  placesMin       Int         @default(1)
-  placesMax       Int
-  
-  // Formateur principal
-  formateurId     String?
-  formateur       User?       @relation("SessionFormateur", fields: [formateurId], references: [id])
-  
-  // Statut
-  status          PhaseStatus @default(BROUILLON)
-  
-  // Timestamps
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  
-  // Relations
-  dossiers        Dossier[]
-  emargements     Emargement[]
-  
+  id             String       @id @default(cuid())
+  programmeId    String
+  reference      String
+  dateDebut      DateTime
+  dateFin        DateTime
+  lieuFormation  String?
+  placesMin      Int          @default(1)
+  placesMax      Int
+  formateurId    String?
+  status         PhaseStatus  @default(BROUILLON)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organizationId String
+  siteId         String
+  dossiers       Dossier[]
+  emargements    Emargement[]
+  formateur      User?        @relation("SessionFormateur", fields: [formateurId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  programme      Programme    @relation(fields: [programmeId], references: [id])
+  site           Site         @relation(fields: [siteId], references: [id])
+
   @@unique([organizationId, reference])
   @@index([organizationId])
   @@index([siteId])
@@ -483,134 +256,89 @@ model Session {
   @@index([status])
 }
 
-// ===========================================================================
-// PHASE 2 : ADMISSION
-// ===========================================================================
-
 /// Dossier stagiaire (Inscription à une session)
 model Dossier {
-  id                  String      @id @default(cuid())
-  
-  // Tenant Isolation
-  organizationId      String
-  organization        Organization @relation(fields: [organizationId], references: [id])
-  
-  // Site d'exécution (OBLIGATOIRE)
-  siteId              String
-  site                Site         @relation(fields: [siteId], references: [id])
-  
-  // Session liée
-  sessionId           String
-  session             Session     @relation(fields: [sessionId], references: [id])
-  
-  // Entreprise employeur (CFA / B2B)
-  companyId           String?
-  company             Company?    @relation(fields: [companyId], references: [id])
-  tutorName           String?     // Maître d'apprentissage (CFA)
-  
-  // Stagiaire
-  stagiaireNom        String
-  stagiairePrenom     String
-  stagiaireEmail      String
-  stagiaireTelephone  String?
-  stagiaireAdresse    String?
-  
-  // Positionnement (Phase 2)
-  testPositionnementEnvoye    Boolean   @default(false)
-  testPositionnementComplete  Boolean   @default(false)
-  scorePositionnement         Int?      // 0-100
-  seuilScoreMinimum          Int       @default(50)
-  alertePedagogiqueActive    Boolean   @default(false)
-  
-  // PSH - Déclaration obligatoire
-  declarationPSH              Boolean?  // null = non renseigné (BLOQUANT)
-  adaptationsPSH              String?   // Si oui, détails
-  adaptationsPSHValidees      Boolean   @default(false)
-  
-  // Phase courante
-  phaseActuelle               Int       @default(2)  // 1-5
-  status                      PhaseStatus @default(BROUILLON)
-  
-  // Dates clés
-  dateInscription             DateTime  @default(now())
-  dateValidationAdmission     DateTime?
-  dateDebutEffectif           DateTime?
-  dateFinEffective            DateTime?
-  
-  // Abandon (Machine à état Phase 4)
-  isAbandonne                 Boolean   @default(false)
-  motifAbandon                MotifAbandon?
-  dateAbandon                 DateTime?
-  abandonValidePedago         Boolean   @default(false)
-  abandonValideAdmin          Boolean   @default(false)
-  
-  // Assiduité (Phase 4)
-  tauxAssiduite               Decimal   @default(0) @db.Decimal(5, 2)  // 0.00 - 100.00
-  
-  // Clôture (Phase 5)
-  certificatGenere            Boolean   @default(false)
-  dateCertificat              DateTime?
-  factureGeneree              Boolean   @default(false)
-  dateFacture                 DateTime?
-  
-  // Créateur
-  createdById                 String
-  createdBy                   User      @relation("DossierCreatedBy", fields: [createdById], references: [id])
-  
-  // Timestamps
-  createdAt                   DateTime  @default(now())
-  updatedAt                   DateTime  @updatedAt
-  
-  // Relations
-  contrats                    Contrat[]
-  emargements                 Emargement[]
-  preuves                     Preuve[]
-  evaluations                 Evaluation[]
-  complianceAlerts            ComplianceAlert[]
-  
+  id                         String            @id @default(cuid())
+  sessionId                  String
+  stagiaireNom               String
+  stagiairePrenom            String
+  stagiaireEmail             String
+  stagiaireTelephone         String?
+  stagiaireAdresse           String?
+  testPositionnementEnvoye   Boolean           @default(false)
+  testPositionnementComplete Boolean           @default(false)
+  scorePositionnement        Int?
+  seuilScoreMinimum          Int               @default(50)
+  alertePedagogiqueActive    Boolean           @default(false)
+  declarationPSH             Boolean?
+  adaptationsPSH             String?
+  adaptationsPSHValidees     Boolean           @default(false)
+  phaseActuelle              Int               @default(2)
+  status                     PhaseStatus       @default(BROUILLON)
+  dateInscription            DateTime          @default(now())
+  dateValidationAdmission    DateTime?
+  dateDebutEffectif          DateTime?
+  dateFinEffective           DateTime?
+  isAbandonne                Boolean           @default(false)
+  motifAbandon               MotifAbandon?
+  dateAbandon                DateTime?
+  abandonValidePedago        Boolean           @default(false)
+  abandonValideAdmin         Boolean           @default(false)
+  tauxAssiduite              Decimal           @default(0) @db.Decimal(5, 2)
+  certificatGenere           Boolean           @default(false)
+  dateCertificat             DateTime?
+  factureGeneree             Boolean           @default(false)
+  dateFacture                DateTime?
+  createdById                String
+  createdAt                  DateTime          @default(now())
+  updatedAt                  DateTime          @updatedAt
+  companyId                  String?
+  organizationId             String
+  tutorName                  String?
+  siteId                     String
+  dispatchedAt               DateTime?
+  dispatchedFromId           String?
+  originalLeadDate           DateTime?
+  source                     DossierSource     @default(ORGANIC)
+  stagiaireCp                String?
+  complianceAlerts           ComplianceAlert[]
+  contrats                   Contrat[]
+  company                    Company?          @relation(fields: [companyId], references: [id])
+  createdBy                  User              @relation("DossierCreatedBy", fields: [createdById], references: [id])
+  organization               Organization      @relation(fields: [organizationId], references: [id])
+  session                    Session           @relation(fields: [sessionId], references: [id])
+  site                       Site              @relation(fields: [siteId], references: [id])
+  emargements                Emargement[]
+  evaluations                Evaluation[]
+  preuves                    Preuve[]
+
   @@index([organizationId])
   @@index([siteId])
   @@index([sessionId])
   @@index([companyId])
   @@index([stagiaireEmail])
   @@index([status, phaseActuelle])
+  @@index([source])
 }
-
-// ===========================================================================
-// PHASE 3 : CONTRACTUALISATION
-// ===========================================================================
 
 /// Financeur
 model Financeur {
-  id              String        @id @default(cuid())
-  
-  // Tenant Isolation
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  
-  type            TypeFinanceur
-  
-  // Identifiants
-  raisonSociale   String?       // Pour OPCO/Entreprise
-  siret           String?
-  codeOPCO        String?       // Code OPCO si applicable
-  
-  // Pour CPF
-  numeroCPF       String?       // Numéro de dossier CPF
-  soldeCPF        Decimal?      @db.Decimal(10, 2)
-  
-  // Contact
-  contactNom      String?
-  contactEmail    String?
+  id               String        @id @default(cuid())
+  type             TypeFinanceur
+  raisonSociale    String?
+  siret            String?
+  codeOPCO         String?
+  numeroCPF        String?
+  soldeCPF         Decimal?      @db.Decimal(10, 2)
+  contactNom       String?
+  contactEmail     String?
   contactTelephone String?
-  
-  // Timestamps
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
-  
-  // Relations
-  contrats        Contrat[]
-  
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+  organizationId   String
+  contrats         Contrat[]
+  organization     Organization  @relation(fields: [organizationId], references: [id])
+
   @@index([organizationId])
   @@index([type])
   @@index([siret])
@@ -618,58 +346,34 @@ model Financeur {
 
 /// Contrat ou Convention
 model Contrat {
-  id                    String        @id @default(cuid())
-  
-  // Dossier lié
-  dossierId             String
-  dossier               Dossier       @relation(fields: [dossierId], references: [id])
-  
-  // Type (B2B=Convention, B2C=Contrat)
-  type                  TypeContrat
-  
-  // Snapshot programme (Versionning obligatoire)
-  programmeSnapshotId   String
-  programmeSnapshot     ProgrammeSnapshot @relation(fields: [programmeSnapshotId], references: [id])
-  
-  // Financement
-  financeurId           String
-  financeur             Financeur     @relation(fields: [financeurId], references: [id])
-  
-  // Montants
-  montantHT             Decimal       @db.Decimal(10, 2)
-  montantTVA            Decimal       @db.Decimal(10, 2)
-  montantTTC            Decimal       @db.Decimal(10, 2)
-  
-  // Dates (Compliance Gate CPF)
-  dateSignature         DateTime?
-  dateDebutPrevue       DateTime
-  dateFinPrevue         DateTime
-  
-  // Délai rétractation CPF (11 jours ouvrés)
-  delaiRetractationJours Int?         // Calculé automatiquement si CPF
-  dateFinRetractation   DateTime?     // = dateSignature + 11 jours ouvrés
-  retractationRespectee Boolean       @default(false)
-  
-  // Validation financement (RESP_ADMIN)
-  accordFinancementRecu Boolean       @default(false)
-  dateAccordFinancement DateTime?
-  referenceAccord       String?       // N° accord OPCO ou CPF
-  
-  // Statut
-  isSigned              Boolean       @default(false)
-  status                PhaseStatus   @default(BROUILLON)
-  
-  // Mentions légales L.6353-1
-  mentionsLegalesIncluses Boolean     @default(true)
-  
-  // Timestamps
-  createdAt             DateTime      @default(now())
-  updatedAt             DateTime      @updatedAt
-  
-  // Relations
-  preuves               Preuve[]
-  avenants              Avenant[]
-  
+  id                      String            @id @default(cuid())
+  dossierId               String
+  type                    TypeContrat
+  programmeSnapshotId     String
+  financeurId             String
+  montantHT               Decimal           @db.Decimal(10, 2)
+  montantTVA              Decimal           @db.Decimal(10, 2)
+  montantTTC              Decimal           @db.Decimal(10, 2)
+  dateSignature           DateTime?
+  dateDebutPrevue         DateTime
+  dateFinPrevue           DateTime
+  delaiRetractationJours  Int?
+  dateFinRetractation     DateTime?
+  retractationRespectee   Boolean           @default(false)
+  accordFinancementRecu   Boolean           @default(false)
+  dateAccordFinancement   DateTime?
+  referenceAccord         String?
+  isSigned                Boolean           @default(false)
+  status                  PhaseStatus       @default(BROUILLON)
+  mentionsLegalesIncluses Boolean           @default(true)
+  createdAt               DateTime          @default(now())
+  updatedAt               DateTime          @updatedAt
+  avenants                Avenant[]
+  dossier                 Dossier           @relation(fields: [dossierId], references: [id])
+  financeur               Financeur         @relation(fields: [financeurId], references: [id])
+  programmeSnapshot       ProgrammeSnapshot @relation(fields: [programmeSnapshotId], references: [id])
+  preuves                 Preuve[]
+
   @@index([dossierId])
   @@index([financeurId])
   @@index([status])
@@ -677,72 +381,45 @@ model Contrat {
 
 /// Avenant (Modification après signature - Tracée)
 model Avenant {
-  id              String   @id @default(cuid())
-  
-  contratId       String
-  contrat         Contrat  @relation(fields: [contratId], references: [id])
-  
-  // Modification
-  motif           String
-  ancienneValeur  Json     // Snapshot avant modification
-  nouvelleValeur  Json     // Nouvelle valeur
-  
-  // Validation
-  validePar       String   // UserId (RESP_ADMIN ou ADMIN)
-  dateValidation  DateTime @default(now())
-  
-  // Timestamps
-  createdAt       DateTime @default(now())
-  
+  id             String   @id @default(cuid())
+  contratId      String
+  motif          String
+  ancienneValeur Json
+  nouvelleValeur Json
+  validePar      String
+  dateValidation DateTime @default(now())
+  createdAt      DateTime @default(now())
+  contrat        Contrat  @relation(fields: [contratId], references: [id])
+
   @@index([contratId])
 }
 
-// ===========================================================================
-// PHASE 4 : DÉROULEMENT
-// ===========================================================================
-
 /// Émargement (Suivi assiduité par demi-journée)
 model Emargement {
-  id              String   @id @default(cuid())
-  
-  // Session et Dossier liés
-  sessionId       String
-  session         Session  @relation(fields: [sessionId], references: [id])
-  dossierId       String
-  dossier         Dossier  @relation(fields: [dossierId], references: [id])
-  
-  // Date et créneau
-  dateEmargement  DateTime
-  demiJournee     String   // "MATIN" ou "APRES_MIDI"
-  
-  // Présence
-  estPresent      Boolean  @default(false)
-  
-  // Signature (Base64 ou référence fichier)
+  id                 String    @id @default(cuid())
+  sessionId          String
+  dossierId          String
+  dateEmargement     DateTime
+  demiJournee        String
+  estPresent         Boolean   @default(false)
   signatureStagiaire String?
   signatureFormateur String?
-  
-  // Justificatif absence
-  absenceJustifiee Boolean @default(false)
-  motifAbsence     String?
-  justificatifPath String?  // Chemin vers le document uploadé
-  justificatifValide Boolean @default(false)
-  
-  // Logs FOAD (si formation à distance)
-  isFOAD          Boolean  @default(false)
-  tempsConnexion  Int?     // En minutes
-  jalonAtteint    Boolean  @default(false)
-  
-  // Forçage date (ADMIN uniquement - Alerte REF_QUALITE)
-  dateOriginale   DateTime? // Si modification rétroactive
-  isForced        Boolean   @default(false)
-  forcedById      String?
-  forcedReason    String?
-  
-  // Timestamps
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
-  
+  absenceJustifiee   Boolean   @default(false)
+  motifAbsence       String?
+  justificatifPath   String?
+  justificatifValide Boolean   @default(false)
+  isFOAD             Boolean   @default(false)
+  tempsConnexion     Int?
+  jalonAtteint       Boolean   @default(false)
+  dateOriginale      DateTime?
+  isForced           Boolean   @default(false)
+  forcedById         String?
+  forcedReason       String?
+  createdAt          DateTime  @default(now())
+  updatedAt          DateTime  @updatedAt
+  dossier            Dossier   @relation(fields: [dossierId], references: [id])
+  session            Session   @relation(fields: [sessionId], references: [id])
+
   @@unique([sessionId, dossierId, dateEmargement, demiJournee])
   @@index([sessionId])
   @@index([dossierId])
@@ -751,130 +428,86 @@ model Emargement {
 
 /// Alerte décrochage
 model AlerteDecrochage {
-  id              String   @id @default(cuid())
-  
-  dossierId       String
-  sessionId       String
-  
-  // Déclencheur
-  type            String   // "ABSENCE_CONSECUTIVE", "SCORE_BAS", "INACTIVITE_FOAD"
-  description     String
-  
-  // Traitement
-  isTraitee       Boolean  @default(false)
-  dateTraitement  DateTime?
-  actionPrise     String?
-  traiteParId     String?
-  
-  // Timestamps
-  createdAt       DateTime @default(now())
-  
+  id             String    @id @default(cuid())
+  dossierId      String
+  sessionId      String
+  type           String
+  description    String
+  isTraitee      Boolean   @default(false)
+  dateTraitement DateTime?
+  actionPrise    String?
+  traiteParId    String?
+  createdAt      DateTime  @default(now())
+
   @@index([dossierId])
   @@index([isTraitee])
 }
 
-// ===========================================================================
-// PHASE 5 : CLÔTURE & PREUVES
-// ===========================================================================
-
 /// Évaluation (Résultats et évaluations à chaud)
 model Evaluation {
-  id              String   @id @default(cuid())
-  
-  dossierId       String
-  dossier         Dossier  @relation(fields: [dossierId], references: [id])
-  
-  // Type
-  type            String   // "ACQUIS", "SATISFACTION_CHAUD", "SATISFACTION_FROID"
-  
-  // Contenu
-  score           Int?     // 0-100 ou note sur 10
-  commentaires    String?
-  reponses        Json?    // Réponses détaillées au questionnaire
-  
-  // Validation
-  saisiPar        String   // UserId
-  dateSaisie      DateTime @default(now())
-  
+  id           String   @id @default(cuid())
+  dossierId    String
+  type         String
+  score        Int?
+  commentaires String?
+  reponses     Json?
+  saisiPar     String
+  dateSaisie   DateTime @default(now())
+  dossier      Dossier  @relation(fields: [dossierId], references: [id])
+
   @@index([dossierId])
   @@index([type])
 }
 
 /// Preuve (Documents générés - Qualiopi)
 model Preuve {
-  id              String     @id @default(cuid())
-  
-  // Tenant Isolation
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  
-  // Type de preuve
-  type            TypePreuve
-  
-  // Entité liée (polymorphe)
-  programmeId     String?
-  programme       Programme? @relation(fields: [programmeId], references: [id])
-  dossierId       String?
-  dossier         Dossier?   @relation(fields: [dossierId], references: [id])
-  contratId       String?
-  contrat         Contrat?   @relation(fields: [contratId], references: [id])
-  
-  // Fichier
-  nomFichier      String
-  cheminFichier   String
-  mimeType        String
-  tailleFichier   Int        // En bytes
-  
-  // Hash intégrité (SHA-256)
-  hashFichier     String
-  
-  // Signature électronique (eIDAS)
-  isSigned        Boolean    @default(false)
-  signatureInfo   Json?      // Métadonnées signature
-  
-  // Métadonnées
-  dateGeneration  DateTime   @default(now())
-  genereParId     String?
-  
+  id             String       @id @default(cuid())
+  type           TypePreuve
+  dossierId      String?
+  organizationId String
+  programmeId    String?
+  contratId      String?
+  nomFichier     String
+  cheminFichier  String
+  mimeType       String
+  tailleFichier  Int
+  hashFichier    String
+  isSigned       Boolean      @default(false)
+  signatureId    String?
+  dateGeneration DateTime     @default(now())
+  genereParId    String
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  generePar      User         @relation("PreuveGenerePar", fields: [genereParId], references: [id])
+  dossier        Dossier?     @relation(fields: [dossierId], references: [id])
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  programme      Programme?   @relation(fields: [programmeId], references: [id])
+  contrat        Contrat?     @relation(fields: [contratId], references: [id])
+
   @@index([organizationId])
   @@index([type])
   @@index([dossierId])
   @@index([contratId])
 }
 
-// ===========================================================================
-// TRANSVERSE : QUALITÉ
-// ===========================================================================
-
 /// Réclamation
 model Reclamation {
-  id              String      @id @default(cuid())
-  
-  // Tenant Isolation
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  
-  // Demandeur
-  demandeurType   String      // "STAGIAIRE", "ENTREPRISE", "FINANCEUR"
-  demandeurNom    String
-  demandeurEmail  String
-  
-  // Contenu
-  objet           String
-  description     String
-  
-  // Traitement (REF_QUALITE)
-  ownerId         String?
-  owner           User?       @relation("ReclamationOwner", fields: [ownerId], references: [id])
-  
-  status          PhaseStatus @default(BROUILLON)
-  dateResolution  DateTime?
+  id                 String       @id @default(cuid())
+  demandeurType      String
+  demandeurNom       String
+  demandeurEmail     String
+  objet              String
+  description        String
+  ownerId            String?
+  status             PhaseStatus  @default(BROUILLON)
+  dateResolution     DateTime?
   actionsCorrectives String?
-  
-  // Timestamps
-  createdAt       DateTime    @default(now())
-  updatedAt       DateTime    @updatedAt
-  
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  organizationId     String
+  organization       Organization @relation(fields: [organizationId], references: [id])
+  owner              User?        @relation("ReclamationOwner", fields: [ownerId], references: [id])
+
   @@index([organizationId])
   @@index([status])
   @@index([ownerId])
@@ -882,123 +515,597 @@ model Reclamation {
 
 /// Validation (Trace des Compliance Gates)
 model Validation {
-  id              String   @id @default(cuid())
-  
-  // Action validée
-  action          String   // Ex: "PUBLISH_OFFER", "VALIDATE_ADMISSION"
-  entityType      String   // Ex: "Programme", "Dossier"
-  entityId        String
-  
-  // Phase CdCF
-  phase           Int      // 1-5
-  
-  // Valideur
-  validateurId    String
-  validateur      User     @relation(fields: [validateurId], references: [id])
-  roleValidateur  Role
-  
-  // Résultat
-  decision        String   // "APPROVED", "REJECTED", "FORCED"
-  motif           String?  // Obligatoire si REJECTED ou FORCED
-  
-  // Timestamp immuable
-  createdAt       DateTime @default(now())
-  
+  id             String   @id @default(cuid())
+  action         String
+  entityType     String
+  entityId       String
+  phase          Int
+  validateurId   String
+  roleValidateur Role
+  decision       String
+  motif          String?
+  createdAt      DateTime @default(now())
+  validateur     User     @relation(fields: [validateurId], references: [id])
+
   @@index([entityType, entityId])
   @@index([validateurId])
   @@index([phase])
 }
 
-// ===========================================================================
-// MOTEUR DE RÈGLES - COMPLIANCE ALERTS
-// ===========================================================================
-
 /// @Compliance: Stocke les blocages levés par le Moteur de Règles JSON
 /// Chaque alerte référence un ruleId du fichier compliance_rules.json
 model ComplianceAlert {
-  id          String   @id @default(cuid())
-  
-  // Dossier concerné
-  dossierId   String
-  dossier     Dossier  @relation(fields: [dossierId], references: [id])
-  
-  // Référence à la règle (compliance_rules.json)
-  ruleId      String   // Ex: "RULE_CPF_RETRACTATION", "RULE_CERTIF_ACTIVE"
-  
-  // Sévérité (BLOCKING, REQUIRES_APPROVAL, WARNING)
-  severity    String
-  
-  // Contexte
-  context     String   // Phase CdCF: "CATALOGUE", "ADMISSION", "CONTRACTUALISATION", etc.
-  trigger     String   // Action déclenchante: "VALIDATE_START_DATE", "PUBLISH_OFFER"
-  
-  // Message d'erreur
-  message     String
-  
-  // Données contextuelles
-  details     Json?    // Snapshot des données ayant déclenché l'alerte
-  
-  // Résolution
-  isResolved   Boolean  @default(false)
+  id           String    @id @default(cuid())
+  dossierId    String
+  ruleId       String
+  severity     String
+  context      String
+  trigger      String
+  message      String
+  details      Json?
+  isResolved   Boolean   @default(false)
   resolvedById String?
   resolvedAt   DateTime?
-  resolution   String?  // Motif de résolution si forcé
-  
-  // Timestamp immuable
-  createdAt    DateTime @default(now())
-  
+  resolution   String?
+  createdAt    DateTime  @default(now())
+  dossier      Dossier   @relation(fields: [dossierId], references: [id])
+
   @@index([dossierId])
   @@index([ruleId])
   @@index([isResolved])
   @@index([severity])
 }
 
-// ===========================================================================
-// AUDIT LOG (IMMUABLE - Qualiopi)
-// ===========================================================================
-
 /// Log d'audit immuable - AUCUN UPDATE/DELETE AUTORISÉ
 model AuditLog {
-  id              String      @id @default(cuid())
-  timestamp       DateTime    @default(now())
-  
-  // Tenant Isolation
-  organizationId  String
-  organization    Organization @relation(fields: [organizationId], references: [id])
-  
-  // Acteur
-  userId          String
-  userRole        Role
-  user            User        @relation(fields: [userId], references: [id])
-  
-  // Action (Référence rbac_matrix.md)
-  action          String      // Ex: "CREATE_PROGRAMME", "VALIDATE_ADMISSION"
-  niveauAction    NiveauAction
-  
-  // Entité concernée
-  entityType      String      // Ex: "Programme", "Dossier", "Emargement"
-  entityId        String
-  
-  // Contexte
-  phase           Int?        // Phase CdCF (1-5)
-  
-  // Forçage (🛡️ dans RBAC)
-  isForced        Boolean     @default(false)
-  justification   String?     // OBLIGATOIRE si isForced = true
-  
-  // Snapshot des données
-  previousState   Json?       // État avant modification
-  newState        Json?       // État après modification
-  
-  // Métadonnées techniques
-  ipAddress       String?
-  userAgent       String?
-  requestId       String?     // Pour traçabilité requête
-  
+  id             String       @id @default(cuid())
+  timestamp      DateTime     @default(now())
+  userId         String
+  userRole       Role
+  action         String
+  niveauAction   NiveauAction
+  entityType     String
+  entityId       String
+  phase          Int?
+  isForced       Boolean      @default(false)
+  justification  String?
+  previousState  Json?
+  newState       Json?
+  ipAddress      String?
+  userAgent      String?
+  requestId      String?
+  organizationId String
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  user           User         @relation(fields: [userId], references: [id])
+
   @@index([organizationId])
   @@index([userId])
   @@index([entityType, entityId])
   @@index([timestamp])
   @@index([action])
   @@index([phase])
+}
+
+model Campaign {
+  id                  String               @id @default(cuid())
+  organizationId      String
+  name                String
+  source              LeadSource
+  externalId          String?
+  utmSource           String?
+  utmMedium           String?
+  utmCampaign         String?
+  budget              Decimal?             @db.Decimal(10, 2)
+  spent               Decimal?             @db.Decimal(10, 2)
+  startDate           DateTime?
+  endDate             DateTime?
+  isActive            Boolean              @default(true)
+  webhookSecret       String?
+  createdAt           DateTime             @default(now())
+  updatedAt           DateTime             @updatedAt
+  organization        Organization         @relation(fields: [organizationId], references: [id])
+  leads               Lead[]
+  franchiseCandidates FranchiseCandidate[]
+
+  @@unique([organizationId, externalId])
+  @@index([isActive])
+  @@index([organizationId])
+  @@index([source])
+}
+
+model CandidateActivity {
+  id          String                @id @default(cuid())
+  candidateId String
+  type        CandidateActivityType
+  description String
+  metadata    Json?
+  performedBy String?
+  createdAt   DateTime              @default(now())
+  updatedAt   DateTime              @updatedAt
+  candidate   FranchiseCandidate    @relation(fields: [candidateId], references: [id], onDelete: Cascade)
+
+  @@index([candidateId])
+  @@index([createdAt(sort: Desc)])
+  @@index([type])
+}
+
+model FranchiseCandidate {
+  id                   String              @id @default(cuid())
+  organizationId       String
+  email                String
+  phone                String?
+  status               CandidateStatus     @default(NEW)
+  targetZone           String?
+  targetZipCodes       String[]
+  investmentBudget     Decimal?            @db.Decimal(12, 2)
+  dipSentAt            DateTime?
+  dipSignedAt          DateTime?
+  contractSignedAt     DateTime?
+  createdOrgId         String?
+  notes                String?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  campaignId           String?
+  companyName          String
+  experienceScore      Int?
+  financialScore       Int?
+  franchiseType        FranchiseType
+  geoScore             Int?
+  leadSource           LeadSource          @default(WEBSITE_FORM)
+  motivationIndex      Int?
+  qualificationAnswers Json?
+  qualificationScore   Int?
+  qualifiedAt          DateTime?
+  representantFonction String?
+  representantNom      String
+  representantPrenom   String
+  siret                String?
+  structureScore       Int?
+  timingScore          Int?
+  utmCampaign          String?
+  utmMedium            String?
+  utmSource            String?
+  name                 String?
+  activities           CandidateActivity[]
+  organization         Organization        @relation(fields: [organizationId], references: [id])
+  campaign             Campaign?           @relation(fields: [campaignId], references: [id])
+
+  @@index([email])
+  @@index([franchiseType])
+  @@index([leadSource])
+  @@index([organizationId])
+  @@index([qualificationScore])
+  @@index([status])
+}
+
+model Lead {
+  id                 String       @id @default(cuid())
+  organizationId     String
+  source             LeadSource
+  sourceRef          String?
+  campaignId         String?
+  partnerId          String?
+  email              String
+  nom                String
+  prenom             String
+  telephone          String?
+  adresse            String?          // Rue / numéro de rue
+  codePostal         String?
+  ville              String?
+  formationSouhaitee String?
+  message            String?
+  dateReponse        DateTime?        // Date de réponse du lead
+  metadata           Json?
+  status             LeadStatus   @default(NEW)
+  score              Int?
+  notes              String?
+  assignedToId       String?
+  convertedAt        DateTime?
+  convertedDossierId String?
+  createdAt          DateTime     @default(now())
+  updatedAt          DateTime     @updatedAt
+  campaign           Campaign?    @relation(fields: [campaignId], references: [id])
+  organization       Organization @relation(fields: [organizationId], references: [id])
+  partner            Partner?     @relation(fields: [partnerId], references: [id])
+  leadConsent        LeadConsent?
+
+  @@index([campaignId])
+  @@index([createdAt])
+  @@index([email])
+  @@index([organizationId])
+  @@index([partnerId])
+  @@index([source])
+  @@index([status])
+}
+
+model LeadConsent {
+  id            String    @id @default(cuid())
+  leadId        String    @unique
+  consentGiven  Boolean   @default(false)
+  consentText   String
+  consentMethod String
+  legalBasis    String
+  withdrawnAt   DateTime?
+  anonymizedAt  DateTime?
+  ipAddress     String?
+  userAgent     String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+  lead          Lead      @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([consentGiven])
+  @@index([leadId])
+}
+
+model NetworkSettings {
+  id                       String       @id @default(cuid())
+  organizationId           String       @unique
+  onboardingEmailSubject   String       @default("Signature de vos contrats de partenariat - Polyx ERP")
+  onboardingEmailBody      String       @db.Text
+  activationEmailSubject   String       @default("Activation de votre accès API - Polyx ERP")
+  activationEmailBody      String       @db.Text
+  apiDocumentationMarkdown String       @db.Text
+  updatedAt                DateTime     @updatedAt
+  organization             Organization @relation(fields: [organizationId], references: [id])
+}
+
+/// Templates de documents juridiques configurables par organisme
+model DocumentTemplate {
+  id             String               @id @default(cuid())
+  organizationId String
+  type           DocumentTemplateType // CONTRACT, DPA, CGV
+  title          String               // Titre du document (ex: "Contrat de Partenariat API")
+  version        Int                  @default(1) // Numéro de version
+  isActive       Boolean              @default(true) // Seul le template actif est utilisé
+  sections       Json                 // Sections du document [{title, content}]
+  variables      Json?                // Métadonnées sur les variables disponibles
+  footerText     String?              @db.Text // Texte de pied de page
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+  createdBy      String?              // userId de l'auteur
+
+  organization   Organization         @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, type, version])
+  @@index([organizationId, type, isActive])
+}
+
+model Partner {
+  id             String @id @default(cuid())
+  organizationId String
+
+  // ─── Identification personne morale ─────────────────────
+  companyName    String // Raison sociale
+  formeJuridique String? // SAS, SARL, EURL, SA, SCI, Auto-entrepreneur...
+  capitalSocial  Decimal? @db.Decimal(12, 2) // Capital social en euros
+  siret          String? // SIRET 14 chiffres
+  siren          String? // SIREN 9 chiffres (déduit du SIRET)
+  codeNAF        String? // Code APE/NAF
+  rcs            String? // RCS (ex: "RCS Paris B 123 456 789")
+  tvaIntracom    String? // N° TVA intracommunautaire
+
+  // ─── Adresse du siège social ────────────────────────────
+  adresse           String? // Numéro et rue
+  complementAdresse String? // Bâtiment, étage, etc.
+  codePostal        String? // Code postal
+  ville             String? // Ville
+  pays              String  @default("France") // Pays
+
+  // ─── Représentant légal ─────────────────────────────────
+  representantNom      String? // Nom complet du représentant légal
+  representantFonction String? // Fonction (Gérant, Président, DG...)
+
+  // ─── Contact opérationnel (technique / leads) ───────────
+  contactName  String // Nom du contact opérationnel
+  contactEmail String // Email du contact
+  contactPhone String? // Téléphone du contact
+
+  // ─── Coordonnées bancaires (pour facturation) ──────────
+  iban String? // IBAN
+  bic  String? // BIC / SWIFT
+
+  // ─── API & Technique ────────────────────────────────────
+  apiKeyHash   String?  @unique // SHA-256 hash de la clé API (null tant que non activé)
+  apiKeyPrefix String? // Préfixe visible (pk_live_xxxx...) (null tant que non activé)
+  rateLimit    Int      @default(100) // Requêtes max / heure
+  webhookUrl   String? // URL callback pour notifications
+  ipWhitelist  String[] // IPs autorisées (vide = toutes)
+
+  // ─── Contrat & Conformité ──────────────────────────────
+  contractUrl       String? // URL du contrat signé
+  contractSignedAt  DateTime? // Date signature contrat
+  contractExpiresAt DateTime? // Date expiration contrat
+  dpaSignedAt       DateTime? // Date signature DPA (RGPD)
+  ndaSignedAt       DateTime? // Date signature NDA
+  commissionRate    Decimal?  @db.Decimal(5, 2) // Taux commission (si applicable)
+  costPerLead       Decimal?  @db.Decimal(8, 2) // Coût fixe par lead soumis (€)
+  notes             String?   @db.Text // Notes internes
+
+  // ─── Statut & Métriques ─────────────────────────────────
+  status              PartnerStatus @default(PENDING)
+  totalLeadsSubmitted Int           @default(0)
+  totalLeadsConverted Int           @default(0)
+  createdAt           DateTime      @default(now())
+  updatedAt           DateTime      @updatedAt
+
+  // ─── Relations ──────────────────────────────────────────
+  leads          Lead[]
+  auditLogs      PartnerAuditLog[]
+  qualification  PartnerQualification?
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([apiKeyHash])
+  @@index([organizationId])
+  @@index([status])
+  @@index([siret])
+}
+
+/// Journal d'audit des actions partenaires (Qualiopi Ind.17/26 + RGPD Art.5)
+model PartnerAuditLog {
+  id             String   @id @default(cuid())
+  partnerId      String
+  organizationId String
+  action         String   // CREATED, ACTIVATED, SUSPENDED, CONTRACT_SIGNED, DPA_SIGNED, 
+                          // NDA_SIGNED, API_KEY_GENERATED, API_KEY_REVOKED, RATE_LIMIT_CHANGED,
+                          // CONTRACT_EXPIRED, STATUS_CHANGED, UPDATED, DELETED, LEAD_REJECTED_COMPLIANCE
+  performedBy    String?  // userId de l'admin qui a effectué l'action (null = système)
+  performedByName String? // Nom lisible de l'acteur
+  details        String?  @db.Text // Description détaillée de l'action
+  previousValue  Json?    // Snapshot avant modification
+  newValue       Json?    // Snapshot après modification
+  ipAddress      String?  // IP de l'admin
+  userAgent      String?  // User-Agent de l'admin
+  createdAt      DateTime @default(now())
+
+  partner        Partner  @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([partnerId])
+  @@index([organizationId])
+  @@index([action])
+  @@index([createdAt])
+}
+
+/// Qualification partenaire — Qualiopi Ind. 17 (sous-traitance) & Ind. 26 (intervenants externes)
+/// Trace la convention de sous-traitance, la qualification du partenaire et le contrôle qualité.
+model PartnerQualification {
+  id             String @id @default(cuid())
+  partnerId      String @unique
+  organizationId String
+
+  // ─── Convention de sous-traitance (Ind. 17) ────────────
+  conventionSignedAt  DateTime?  // Date signature convention de sous-traitance
+  conventionUrl       String?    // URL du document signé
+  conventionExpiresAt DateTime?  // Date expiration convention
+  conventionType      String     @default("PROSPECTION") // PROSPECTION, FORMATION, MIXTE
+
+  // ─── Dossier de compétences (Ind. 26) ──────────────────
+  hasKbis             Boolean @default(false) // Extrait K-Bis à jour
+  hasRcPro            Boolean @default(false) // Assurance RC Professionnelle
+  hasUrssaf           Boolean @default(false) // Attestation URSSAF < 6 mois
+  hasReferences       Boolean @default(false) // Références clients fournies
+  hasCertifications   Boolean @default(false) // Certifications/agréments
+  hasQualityCharter   Boolean @default(false) // Charte qualité signée
+
+  // ─── Champs textuels pour détails ──────────────────────
+  certificationDetails String?  @db.Text // Détail des certifications (Qualiopi, ISO, etc.)
+  referencesDetails    String?  @db.Text // Détail des références fournies
+  rcProPolicyNumber    String?           // N° de police RC Pro
+  rcProExpiresAt       DateTime?         // Expiration RC Pro
+  urssafDate           DateTime?         // Date attestation URSSAF
+  kbisDate             DateTime?         // Date extrait K-Bis
+
+  // ─── Score & Évaluation ────────────────────────────────
+  qualificationScore   Int      @default(0)  // Score 0-100 calculé
+  qualificationGrade   String   @default("D") // A, B, C, D
+  isQualified          Boolean  @default(false) // Score >= seuil minimum (60)
+  lastEvaluationAt     DateTime?             // Date dernière évaluation
+  nextReviewAt         DateTime?             // Date prochaine revue programmée
+  evaluatedBy          String?               // Nom de l'évaluateur
+  evaluationNotes      String?  @db.Text     // Notes de l'évaluation
+
+  // ─── Timestamps ────────────────────────────────────────
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // ─── Relations ─────────────────────────────────────────
+  partner      Partner      @relation(fields: [partnerId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId])
+  @@index([isQualified])
+  @@index([qualificationGrade])
+  @@index([nextReviewAt])
+}
+
+model Territory {
+  id             String       @id @default(cuid())
+  organizationId String
+  name           String
+  zipCodes       String[]
+  isExclusive    Boolean      @default(true)
+  isActive       Boolean      @default(true)
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
+  organization   Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([isActive])
+  @@index([organizationId])
+}
+
+/// Rôles système RBAC (5 rôles définis dans rbac_matrix.md)
+enum Role {
+  ADMIN
+  RESP_PEDAGO
+  RESP_ADMIN
+  REF_QUALITE
+  FORMAT
+}
+
+/// Statut de phase (Machine à état pour Compliance Gates)
+enum PhaseStatus {
+  BROUILLON
+  EN_ATTENTE_VALIDATION
+  ADMIS
+  CONTRACTUALISE
+  ACTIF
+  EN_COURS
+  SUSPENDU
+  TERMINE
+  CLOTURE
+  FACTURE
+  ABANDONNE
+}
+
+/// Type de financeur (L.6353-1)
+enum TypeFinanceur {
+  CPF
+  OPCO
+  ENTREPRISE
+  PERSONNEL
+  MIXTE
+}
+
+/// Type de contrat
+enum TypeContrat {
+  CONVENTION
+  CONTRAT
+}
+
+/// Type de preuve (Documents Qualiopi)
+enum TypePreuve {
+  PROGRAMME
+  CGV
+  TEST_POSITIONNEMENT
+  ANALYSE_BESOIN
+  CONTRAT_SIGNE
+  ACCORD_FINANCEMENT
+  EMARGEMENT
+  RELEVE_CONNEXION
+  TRAVAUX_STAGIAIRE
+  CERTIFICAT_REALISATION
+  EVALUATION_CHAUD
+  FACTURE
+  AVENANT
+  JUSTIFICATIF_ABSENCE
+}
+
+/// Motif d'abandon (Machine à état Phase 4)
+enum MotifAbandon {
+  FORCE_MAJEURE
+  VOLONTAIRE
+  EXCLUSION
+  DEFAUT_PAIEMENT
+}
+
+/// Statut certification RNCP/RS
+enum StatutCertification {
+  ACTIVE
+  INACTIVE
+  EN_COURS
+}
+
+/// Modalité de formation
+enum Modalite {
+  PRESENTIEL
+  FOAD
+  MIXTE
+}
+
+/// Niveau d'action pour AuditLog
+enum NiveauAction {
+  LECTURE
+  CREATION
+  EDITION
+  VALIDATION
+  SUPPRESSION
+  FORCAGE
+}
+
+/// Type de template de document juridique
+enum DocumentTemplateType {
+  CONTRACT // Contrat de partenariat
+  DPA      // Data Processing Agreement (RGPD)
+  CGV      // Conditions Générales de Vente API
+}
+
+/// Scope d'accès aux sites dans une organisation
+enum MembershipScope {
+  GLOBAL
+  RESTRICTED
+}
+
+/// Type d'organisme de formation (SaaS Multi-Tenant)
+enum OrganizationType {
+  OF_STANDARD
+  CFA
+  BILAN
+  VAE
+}
+
+enum CandidateActivityType {
+  STATUS_CHANGE
+  QUALIFICATION_SCORE
+  EMAIL_SENT
+  NOTE_ADDED
+  DOCUMENT_UPLOADED
+  SYSTEM_ALERT
+  DOSSIER_UPDATE
+  OTHER
+}
+
+enum CandidateStatus {
+  NEW
+  CONTACTED
+  DIP_SENT
+  DIP_SIGNED
+  CONTRACT_SENT
+  SIGNED
+  REJECTED
+  WITHDRAWN
+}
+
+enum DossierSource {
+  ORGANIC
+  NETWORK_DISPATCH
+}
+
+enum FranchiseType {
+  OF
+  CFA
+}
+
+enum LeadSource {
+  FACEBOOK_ADS
+  TIKTOK_ADS
+  GOOGLE_ADS
+  LINKEDIN_ADS
+  WEBSITE_FORM
+  PARTNER_API
+  MANUAL
+  CAMPAIGN
+  REFERRAL
+  EVENT
+  OTHER
+}
+
+enum LeadStatus {
+  NEW
+  CONTACTED
+  QUALIFIED
+  NEGOTIATION
+  CONVERTED
+  LOST
+  ARCHIVED
+}
+
+enum NetworkType {
+  HEAD_OFFICE
+  FRANCHISE
+  SUCCURSALE
+}
+
+enum PartnerStatus {
+  PENDING
+  ACTIVE
+  SUSPENDED
+  TERMINATED
 }

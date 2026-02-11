@@ -48,7 +48,8 @@ export default async function UserHeader() {
         redirect('/login');
     }
 
-    const { nom, prenom, role, email, organizationName, organizationType, siteName, memberships } = session.user;
+    const { nom, prenom, role, email, organizationName, organizationType, memberships } = session.user as any;
+    const siteName = (session.user as any).siteName;
     const roleColor = ROLE_COLORS[role] || 'bg-slate-600';
     const roleLabel = ROLE_LABELS[role] || role;
     const orgTypeLabel = ORG_TYPE_LABELS[organizationType] || organizationType;

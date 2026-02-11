@@ -29,7 +29,7 @@ const createMockOrganization = () => ({
     id: 'org-001',
     name: 'Centre Formation Test',
     type: 'OF',
-    ndaNumber: '12345678901', // NDA valide (11 chiffres)
+    ndaNumber: '12345678901' as string | null, // NDA valide (11 chiffres)
     qualiopiCertified: true,
     isActive: true,
     createdAt: new Date(),
@@ -49,7 +49,7 @@ const createMockDossierIncompleteAssiduity = () => ({
     scorePositionnement: 75,
     seuilScoreMinimum: 50,
     alertePedagogiqueActive: false,
-    declarationPSH: false,
+    declarationPSH: false as boolean | null,
     adaptationsPSH: null,
     adaptationsPSHValidees: false,
     phaseActuelle: 4,
@@ -73,8 +73,8 @@ const createMockDossierIncompleteAssiduity = () => ({
     createdAt: new Date('2024-01-15'),
     updatedAt: new Date('2024-03-01'),
     organizationId: 'org-001',
-    companyId: null,
-    tutorName: null,
+    companyId: null as string | null,
+    tutorName: null as string | null,
     organization: createMockOrganization(),
     // Relations
     session: {

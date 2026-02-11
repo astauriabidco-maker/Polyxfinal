@@ -13,6 +13,7 @@ import ActionButtons from '@/components/compliance/ActionButtons';
 import CorrectionPanel from '@/components/compliance/CorrectionPanel';
 import TimelineToggle from '@/components/compliance/TimelineToggle';
 import UserHeader from '@/components/auth/UserHeader';
+import Sidebar from '@/components/layout/Sidebar';
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { getUserSiteIds, buildSiteFilteredWhereClause } from '@/lib/auth/access';
@@ -117,43 +118,49 @@ export default async function DashboardPage() {
     const bloqueCount = dossiersWithCompliance.filter(d => !d.compliance.success).length;
 
     return (
-        <>
-            {/* Header with user info */}
-            <UserHeader />
+        <div className="min-h-screen bg-slate-950 flex">
+            {/* Sidebar */}
+            <Sidebar />
 
-            <div className="min-h-screen bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 p-6">
-                {/* Header */}
-                <header className="mb-8">
-                    <div className="flex items-center justify-between">
-                        <div>
-                            <h1 className="text-3xl font-bold text-white">📋 Tableau de Bord</h1>
-                            <p className="text-slate-400 mt-1">Gestion des dossiers de formation</p>
+            {/* Main content */}
+            <main className="flex-1 ml-64 transition-all duration-300">
+                {/* Header with user info */}
+                <UserHeader />
+
+                <div className="bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 min-h-screen p-6">
+                    {/* Header */}
+                    <header className="mb-8">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h1 className="text-3xl font-bold text-white">📋 Tableau de Bord</h1>
+                                <p className="text-slate-400 mt-1">Gestion des dossiers de formation</p>
+                            </div>
+                            <div className="flex gap-4">
+                                <StatCard label="Conformes" value={conformeCount} color="emerald" />
+                                <StatCard label="Bloqués" value={bloqueCount} color="red" />
+                                <StatCard label="Total" value={dossiers.length} color="slate" />
+                            </div>
                         </div>
-                        <div className="flex gap-4">
-                            <StatCard label="Conformes" value={conformeCount} color="emerald" />
-                            <StatCard label="Bloqués" value={bloqueCount} color="red" />
-                            <StatCard label="Total" value={dossiers.length} color="slate" />
-                        </div>
+                    </header>
+
+                    {/* Liste des Dossiers */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
+                        {dossiersWithCompliance.map((dossier) => (
+                            <DossierCard key={dossier.id} dossier={dossier} />
+                        ))}
                     </div>
-                </header>
 
-                {/* Liste des Dossiers */}
-                <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
-                    {dossiersWithCompliance.map((dossier) => (
-                        <DossierCard key={dossier.id} dossier={dossier} />
-                    ))}
+                    {/* Empty State */}
+                    {dossiers.length === 0 && (
+                        <div className="text-center py-20">
+                            <div className="text-6xl mb-4">📭</div>
+                            <h2 className="text-xl font-semibold text-white">Aucun dossier</h2>
+                            <p className="text-slate-400 mt-2">Commencez par créer votre premier dossier de formation.</p>
+                        </div>
+                    )}
                 </div>
-
-                {/* Empty State */}
-                {dossiers.length === 0 && (
-                    <div className="text-center py-20">
-                        <div className="text-6xl mb-4">📭</div>
-                        <h2 className="text-xl font-semibold text-white">Aucun dossier</h2>
-                        <p className="text-slate-400 mt-2">Commencez par créer votre premier dossier de formation.</p>
-                    </div>
-                )}
-            </div>
-        </>
+            </main>
+        </div>
     );
 }
 

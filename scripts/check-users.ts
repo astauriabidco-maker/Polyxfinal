@@ -6,13 +6,19 @@ const prisma = new PrismaClient();
 async function main() {
     // Check if users exist
     const users = await prisma.user.findMany({
-        include: { organization: true }
+        include: {
+            memberships: {
+                include: { organization: true }
+            }
+        }
     });
 
     console.log(`\n📊 Found ${users.length} users:\n`);
     for (const user of users) {
-        console.log(`- ${user.email} (${user.role})`);
-        console.log(`  Organization: ${user.organization?.name || 'NONE'}`);
+        console.log(`- ${user.email} (Name: ${user.prenom} ${user.nom})`);
+        user.memberships.forEach(m => {
+            console.log(`  🏢 Org: ${m.organization.name} - Role: ${m.role} - Scope: ${m.scope}`);
+        });
         console.log(`  Has password: ${user.passwordHash ? 'YES' : 'NO'}`);
 
         // Test password

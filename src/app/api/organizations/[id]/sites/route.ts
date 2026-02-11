@@ -203,11 +203,12 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 userId: session.user.id!,
                 userRole: membership.role,
                 action: 'CREATE_SITE',
-                niveauAction: 'CREATION',
+                niveauAction: 'EDITION',
                 entityType: 'Site',
                 entityId: site.id,
                 phase: 0,
                 isForced: false,
+                previousState: {},
                 newState: { name: site.name, city: site.city },
             },
         });
