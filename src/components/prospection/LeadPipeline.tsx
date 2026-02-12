@@ -39,11 +39,16 @@ interface Props {
 
 const STATUS_LABELS: Record<string, { label: string; color: string; icon: string }> = {
     'NEW': { label: 'Nouveau', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: '🆕' },
-    'CONTACTED': { label: 'Contacté', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30', icon: '📞' },
+    'DISPATCHED': { label: 'Affecté', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30', icon: '📨' },
+    'ATTEMPTED': { label: 'Tentative', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: '📞' },
+    'CONTACTED': { label: 'Contacté', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30', icon: '🗣️' },
     'QUALIFIED': { label: 'Qualifié', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: '⭐' },
+    'RDV_SCHEDULED': { label: 'RDV Planifié', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', icon: '📅' },
     'NEGOTIATION': { label: 'Négociation', color: 'bg-amber-500/20 text-amber-400 border-amber-500/30', icon: '🤝' },
     'CONVERTED': { label: 'Converti', color: 'bg-green-500/20 text-green-400 border-green-500/30', icon: '✅' },
-    'LOST': { label: 'Perdu', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: '❌' },
+    'NURTURING': { label: 'A mûrir', color: 'bg-teal-500/20 text-teal-400 border-teal-500/30', icon: '🌱' },
+    'NOT_ELIGIBLE': { label: 'Non éligible', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: '🚫' },
+    'LOST': { label: 'Perdu', color: 'bg-gray-500/20 text-gray-400 border-gray-500/30', icon: '❌' },
     'ARCHIVED': { label: 'Archivé', color: 'bg-slate-500/20 text-slate-400 border-slate-500/30', icon: '📦' },
 };
 
@@ -57,7 +62,10 @@ const SOURCE_LABELS: Record<string, { label: string; icon: string }> = {
     'MANUAL': { label: 'Manuel', icon: '✍️' },
 };
 
-const STATUSES = ['NEW', 'CONTACTED', 'QUALIFIED', 'NEGOTIATION', 'CONVERTED', 'LOST', 'ARCHIVED'];
+const STATUSES = [
+    'NEW', 'DISPATCHED', 'ATTEMPTED', 'CONTACTED', 'QUALIFIED', 'RDV_SCHEDULED',
+    'NEGOTIATION', 'CONVERTED', 'NURTURING', 'NOT_ELIGIBLE', 'LOST', 'ARCHIVED'
+];
 
 export default function LeadPipeline({ leads, stats, isAdmin }: Props) {
     const router = useRouter();

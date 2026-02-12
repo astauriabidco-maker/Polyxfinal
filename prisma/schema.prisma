@@ -76,6 +76,7 @@ model Site {
   membershipSiteAccess MembershipSiteAccess[]
   sessions             Session[]
   organization         Organization           @relation(fields: [organizationId], references: [id])
+  leads                Lead[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -681,10 +682,12 @@ model FranchiseCandidate {
 model Lead {
   id                 String       @id @default(cuid())
   organizationId     String
+  siteId             String?      // [NEW] Dispatch: Agence/Campus responsable
   source             LeadSource
   sourceRef          String?
   campaignId         String?
   partnerId          String?
+  origin             String?      // [NEW] Précision sur l'origine (ex: "Salon étudiant", "Formulaire Contact")
   email              String
   nom                String
   prenom             String
@@ -695,6 +698,7 @@ model Lead {
   formationSouhaitee String?
   message            String?
   dateReponse        DateTime?        // Date de réponse du lead
+  dateRdv            DateTime?        // [NEW] Date du RDV physique confirmé
   metadata           Json?
   status             LeadStatus   @default(NEW)
   score              Int?
@@ -706,6 +710,7 @@ model Lead {
   updatedAt          DateTime     @updatedAt
   campaign           Campaign?    @relation(fields: [campaignId], references: [id])
   organization       Organization @relation(fields: [organizationId], references: [id])
+  site               Site?        @relation(fields: [siteId], references: [id]) // [NEW] Relation
   partner            Partner?     @relation(fields: [partnerId], references: [id])
   leadConsent        LeadConsent?
 
@@ -713,6 +718,7 @@ model Lead {
   @@index([createdAt])
   @@index([email])
   @@index([organizationId])
+  @@index([siteId]) // [NEW] Index
   @@index([partnerId])
   @@index([source])
   @@index([status])
@@ -1088,13 +1094,18 @@ enum LeadSource {
 }
 
 enum LeadStatus {
-  NEW
-  CONTACTED
-  QUALIFIED
-  NEGOTIATION
-  CONVERTED
-  LOST
-  ARCHIVED
+  NEW             // Nouveau, non traité
+  DISPATCHED      // [NEW] Affecté à une agence (Site)
+  ATTEMPTED       // [NEW] Tentative d'appel (NRP)
+  CONTACTED       // Contact établi
+  QUALIFIED       // Pré-qualifié (Intérêt confirmé)
+  RDV_SCHEDULED   // [NEW] RDV Physique programmé (Objectif final Prospection)
+  NEGOTIATION     // En discussion (Post-RDV)
+  CONVERTED       // Dossier créé (Gagné)
+  NOT_ELIGIBLE    // [NEW] Pas éligible / Pas intéressé (Perdu)
+  NURTURING       // [NEW] A recontacter plus tard
+  LOST            // Perdu (Plus de réponse, etc.)
+  ARCHIVED        // Archivé
 }
 
 enum NetworkType {
