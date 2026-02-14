@@ -32,7 +32,8 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
         }
 
-        const { organizationId, role } = session.user;
+        const { organizationId, role: roleObj } = session.user;
+        const role = typeof roleObj === 'string' ? roleObj : (roleObj as any)?.code || 'UNKNOWN';
         if (!['ADMIN', 'RESP_ADMIN'].includes(role)) {
             return NextResponse.json({ error: 'Accès restreint' }, { status: 403 });
         }
@@ -96,7 +97,8 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
         }
 
-        const { organizationId, role } = session.user;
+        const { organizationId, role: roleObj } = session.user;
+        const role = typeof roleObj === 'string' ? roleObj : (roleObj as any)?.code || 'UNKNOWN';
         const userName = `${session.user.prenom || ''} ${session.user.nom || ''}`.trim() || 'admin';
         if (!['ADMIN', 'RESP_ADMIN'].includes(role)) {
             return NextResponse.json({ error: 'Accès restreint' }, { status: 403 });

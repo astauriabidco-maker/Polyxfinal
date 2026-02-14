@@ -167,7 +167,8 @@ export async function GET() {
             return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
         }
 
-        const { organizationId, role } = session.user;
+        const { organizationId, role: roleObj } = session.user;
+        const role = typeof roleObj === 'string' ? roleObj : (roleObj as any)?.code || 'UNKNOWN';
 
         if (!['ADMIN', 'RESP_ADMIN'].includes(role)) {
             return NextResponse.json(
@@ -249,7 +250,8 @@ export async function POST(request: NextRequest) {
             return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
         }
 
-        const { id: userId, organizationId, role, nom, prenom } = session.user;
+        const { id: userId, organizationId, role: roleObj2, nom, prenom } = session.user;
+        const role = typeof roleObj2 === 'string' ? roleObj2 : (roleObj2 as any)?.code || 'UNKNOWN';
 
         if (!['ADMIN', 'RESP_ADMIN'].includes(role)) {
             return NextResponse.json(

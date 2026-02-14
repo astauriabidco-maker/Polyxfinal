@@ -32,7 +32,9 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
         }
 
-        const { id: userId, organizationId, role, nom, prenom } = session.user;
+        const { id: userId, organizationId, role: roleRaw, nom, prenom } = session.user;
+        // role is now a Role model object, extract code string
+        const role = typeof roleRaw === 'string' ? roleRaw : roleRaw?.code || 'UNKNOWN';
 
         // RBAC : ADMIN ou RESP_ADMIN pour les actions RGPD
         if (!['ADMIN', 'RESP_ADMIN'].includes(role)) {

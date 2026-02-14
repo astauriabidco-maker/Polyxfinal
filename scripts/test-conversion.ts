@@ -1,5 +1,5 @@
-
-import { PrismaClient, CandidateStatus, OrganizationType, NetworkType, Role, MembershipScope } from '@prisma/client';
+import { PrismaClient, CandidateStatus, OrganizationType, NetworkType, MembershipScope } from '@prisma/client';
+import { ROLE_IDS } from '../src/lib/constants/roles';
 import bcrypt from 'bcryptjs';
 
 const prisma = new PrismaClient();
@@ -90,7 +90,7 @@ async function testConversion() {
             data: {
                 userId: user.id,
                 organizationId: newOrg.id,
-                role: Role.ADMIN,
+                role: { connect: { id: ROLE_IDS.ADMIN } },
                 scope: MembershipScope.GLOBAL,
                 isActive: true,
             }
@@ -103,7 +103,7 @@ async function testConversion() {
                 data: {
                     userId: superUser.id,
                     organizationId: newOrg.id,
-                    role: Role.ADMIN,
+                    role: { connect: { id: ROLE_IDS.ADMIN } },
                     scope: MembershipScope.GLOBAL,
                     isActive: true,
                 }

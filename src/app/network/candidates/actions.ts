@@ -346,7 +346,7 @@ export async function updateCandidateStatus(formData: FormData) {
  */
 export async function finalizeFranchiseOnboarding(candidateId: string) {
     const session = await auth();
-    if (!session || session.user.role !== 'ADMIN') {
+    if (!session || session.user.role.code !== 'ADMIN') {
         return { error: 'Action réservée aux administrateurs.' };
     }
 

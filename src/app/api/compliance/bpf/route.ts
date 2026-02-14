@@ -22,7 +22,8 @@ export async function GET(req: NextRequest) {
             return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
         }
 
-        const { organizationId, role, nom, prenom } = session.user;
+        const { organizationId, role: roleObj, nom, prenom } = session.user;
+        const role = typeof roleObj === 'string' ? roleObj : (roleObj as any)?.code || 'UNKNOWN';
 
         // RBAC : ADMIN ou RESP_ADMIN uniquement
         if (!['ADMIN', 'RESP_ADMIN'].includes(role)) {

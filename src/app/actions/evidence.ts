@@ -97,7 +97,7 @@ export async function addProof(
             entityId: preuve.id,
             action: 'PROOF_UPLOAD',
             userId: userId,
-            userRole: userRole as Role,
+            userRole: userRole.code,
             niveauAction: 'EDITION',
             newState: {
                 type,

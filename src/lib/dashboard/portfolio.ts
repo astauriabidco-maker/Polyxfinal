@@ -6,13 +6,14 @@
  */
 
 import { prisma } from '@/lib/prisma';
-import { MembershipScope, Role, PhaseStatus } from '@prisma/client';
+import { MembershipScope, PhaseStatus } from '@prisma/client';
 
 export interface PortfolioItem {
     organizationId: string;
     organizationName: string;
     organizationType: string;
-    role: Role;
+    role: string;
+    roleLabel: string;
     scope: MembershipScope;
     dossiersEnCours: number;
     dossiersTotal: number;
@@ -34,6 +35,7 @@ export async function getUserPortfolioStats(userId: string): Promise<PortfolioIt
         },
         include: {
             organization: true,
+            role: true,
             siteAccess: {
                 select: { siteId: true },
             },
@@ -87,7 +89,8 @@ export async function getUserPortfolioStats(userId: string): Promise<PortfolioIt
                 organizationId: orgId,
                 organizationName: membership.organization.name,
                 organizationType: membership.organization.type,
-                role: membership.role,
+                role: membership.role.code,
+                roleLabel: membership.role.name,
                 scope: membership.scope,
                 dossiersEnCours,
                 dossiersTotal,

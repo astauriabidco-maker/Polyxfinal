@@ -10,6 +10,7 @@ import { redirect } from 'next/navigation';
 import { getUserPortfolioStats } from '@/lib/dashboard/portfolio';
 import { PortfolioGrid } from '@/components/portfolio/PortfolioGrid';
 import DashboardLayout from '@/components/layout/DashboardLayout';
+import Link from 'next/link';
 
 export const dynamic = 'force-dynamic';
 
@@ -22,10 +23,8 @@ export default async function PortfolioPage() {
 
     const portfolioItems = await getUserPortfolioStats(session.user.id);
 
-    // Si une seule org, redirect direct vers dashboard
-    if (portfolioItems.length === 1) {
-        redirect('/dashboard');
-    }
+    // Si une seule org, on laisse l'accès au portfolio pour pouvoir en créer d'autres
+    // ou on pourrait mettre un lien direct dans le dashboard vers le portfolio
 
     // Si aucune org, problème
     if (portfolioItems.length === 0) {
@@ -34,9 +33,18 @@ export default async function PortfolioPage() {
                 <div className="min-h-screen bg-slate-950 flex items-center justify-center">
                     <div className="text-center">
                         <h1 className="text-2xl font-bold text-white mb-4">Aucune organisation</h1>
-                        <p className="text-slate-400">
+                        <p className="text-slate-400 mb-6">
                             Vous n'êtes membre d'aucune organisation active.
                         </p>
+                        <Link
+                            href="/organizations/new"
+                            className="inline-flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-blue-500 to-purple-600 text-white font-medium rounded-xl hover:scale-105 transition-transform"
+                        >
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                            </svg>
+                            Créer ma première organisation
+                        </Link>
                     </div>
                 </div>
             </DashboardLayout>
@@ -60,14 +68,25 @@ export default async function PortfolioPage() {
                                 </p>
                             </div>
                         </div>
-                        <form action="/api/auth/signout" method="POST">
-                            <button
-                                type="submit"
-                                className="px-4 py-2 text-sm text-slate-300 hover:text-white transition-colors"
+                        <div className="flex items-center gap-3">
+                            <Link
+                                href="/organizations/new"
+                                className="px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white text-sm font-medium rounded-lg transition-colors flex items-center gap-2"
                             >
-                                Déconnexion
-                            </button>
-                        </form>
+                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4v16m8-8H4" />
+                                </svg>
+                                Nouvelle Organisation
+                            </Link>
+                            <form action="/api/auth/signout" method="POST">
+                                <button
+                                    type="submit"
+                                    className="px-4 py-2 text-sm text-slate-300 hover:text-white transition-colors"
+                                >
+                                    Déconnexion
+                                </button>
+                            </form>
+                        </div>
                     </div>
                 </header>
 

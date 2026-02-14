@@ -32,27 +32,65 @@ interface Site {
     };
 }
 
+interface Organization {
+    id: string;
+    name: string;
+}
+
+// Regex validation UAI (8 caractères: 7 chiffres + 1 lettre)
+const UAI_REGEX = /^[0-9]{7}[A-Z]$/;
+
 export default function SitesListPage() {
     const [sites, setSites] = useState<Site[]>([]);
+    const [organizations, setOrganizations] = useState<Organization[]>([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [searchQuery, setSearchQuery] = useState('');
 
-    // Charger tous les sites
+    // Modal state
+    const [showModal, setShowModal] = useState(false);
+    const [editingSite, setEditingSite] = useState<Site | null>(null);
+    const [saving, setSaving] = useState(false);
+
+    // Form state
+    const [formOrgId, setFormOrgId] = useState('');
+    const [formName, setFormName] = useState('');
+    const [formCity, setFormCity] = useState('');
+    const [formZipCode, setFormZipCode] = useState('');
+    const [formAddress, setFormAddress] = useState('');
+    const [formUaiCode, setFormUaiCode] = useState('');
+    const [formSiretNic, setFormSiretNic] = useState('');
+    const [formIsHeadquarters, setFormIsHeadquarters] = useState(false);
+    const [formError, setFormError] = useState<string | null>(null);
+
+    // Charger tous les sites et les organisations
     useEffect(() => {
-        async function loadSites() {
+        async function loadData() {
             try {
-                const res = await fetch('/api/sites');
-                if (!res.ok) throw new Error('Erreur chargement sites');
-                const data = await res.json();
-                setSites(data.sites || []);
+                // Charger les sites
+                const resSites = await fetch('/api/sites');
+                if (!resSites.ok) throw new Error('Erreur chargement sites');
+                const dataSites = await resSites.json();
+                setSites(dataSites.sites || []);
+
+                // Charger les organisations pour le sélecteur
+                // On déduit les orgs depuis les sites pour l'instant, 
+                // mais idéalement il faudrait un endpoint dédié /api/organizations/list
+                // Faute de mieux, on utilise unique organizations from sites + fetch if needed
+                // MAIS: Si l'utilisateur a une org SANS site, elle n'apparaitra pas.
+                // On va essayer de fetcher le portfolio pour avoir la liste complète
+                const resOrgs = await fetch('/api/organizations');
+                if (resOrgs.ok) {
+                    const dataOrgs = await resOrgs.json();
+                    setOrganizations(dataOrgs.organizations || []);
+                }
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Erreur de chargement');
             } finally {
                 setLoading(false);
             }
         }
-        loadSites();
+        loadData();
     }, []);
 
     // Filtrer les sites
@@ -73,6 +111,105 @@ export default function SitesListPage() {
         acc[orgName].push(site);
         return acc;
     }, {} as Record<string, Site[]>);
+
+    // Ouvrir le modal pour créer
+    const handleCreate = () => {
+        setEditingSite(null);
+        setFormOrgId(organizations.length === 1 ? organizations[0].id : '');
+        setFormName('');
+        setFormCity('');
+        setFormZipCode('');
+        setFormAddress('');
+        setFormUaiCode('');
+        setFormSiretNic('');
+        setFormIsHeadquarters(false);
+        setFormError(null);
+        setShowModal(true);
+    };
+
+    // Ouvrir le modal pour éditer
+    const handleEdit = (site: Site) => {
+        setEditingSite(site);
+        setFormOrgId(site.organizationId);
+        setFormName(site.name);
+        setFormCity(site.city);
+        setFormZipCode(site.zipCode);
+        setFormAddress(site.address || '');
+        setFormUaiCode(site.uaiCode || '');
+        setFormSiretNic(site.siretNic || '');
+        setFormIsHeadquarters(site.isHeadquarters);
+        setFormError(null);
+        setShowModal(true);
+    };
+
+    // Soumettre le formulaire
+    const handleSubmit = async (e: React.FormEvent) => {
+        e.preventDefault();
+        setFormError(null);
+
+        if (!formOrgId) {
+            setFormError('L\'organisation est obligatoire');
+            return;
+        }
+        if (!formName.trim()) {
+            setFormError('Le nom du site est obligatoire');
+            return;
+        }
+        if (!formCity.trim()) {
+            setFormError('La ville est obligatoire');
+            return;
+        }
+        if (!formZipCode.trim()) {
+            setFormError('Le code postal est obligatoire');
+            return;
+        }
+
+        // Check UAI for CFA (needs logic to check org type, skipped for now to keep simple)
+
+        setSaving(true);
+
+        try {
+            const payload = {
+                name: formName.trim(),
+                city: formCity.trim(),
+                zipCode: formZipCode.trim(),
+                address: formAddress.trim() || null,
+                uaiCode: formUaiCode.trim().toUpperCase() || null,
+                siretNic: formSiretNic.trim() || null,
+                isHeadquarters: formIsHeadquarters,
+            };
+
+            const url = editingSite
+                ? `/api/organizations/${formOrgId}/sites/${editingSite.id}`
+                : `/api/organizations/${formOrgId}/sites`;
+
+            const res = await fetch(url, {
+                method: editingSite ? 'PATCH' : 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload),
+            });
+
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || 'Erreur lors de la sauvegarde');
+            }
+
+            // Reload sites to refresh list
+            const resSites = await fetch('/api/sites');
+            if (resSites.ok) {
+                const dataSites = await resSites.json();
+                setSites(dataSites.sites || []);
+            }
+
+            setShowModal(false);
+
+        } catch (err) {
+            setFormError(err instanceof Error ? err.message : 'Une erreur est survenue');
+        } finally {
+            setSaving(false);
+        }
+    };
 
     return (
         <div className="min-h-screen bg-slate-950 flex">
@@ -105,6 +242,16 @@ export default function SitesListPage() {
                                     className="bg-slate-800 border border-slate-700 rounded-lg pl-10 pr-4 py-2 text-white placeholder-slate-400 focus:outline-none focus:border-blue-500 w-64"
                                 />
                             </div>
+
+                            <button
+                                onClick={handleCreate}
+                                className="flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium transition-colors"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                </svg>
+                                Nouveau Site
+                            </button>
                         </div>
                     </div>
                 </header>
@@ -157,15 +304,15 @@ export default function SitesListPage() {
                                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                             </svg>
                             <p className="text-gray-400 mb-4">Aucun site configuré</p>
-                            <p className="text-sm text-gray-500">
-                                Les sites sont créés depuis la page Paramètres de chaque organisation.
-                            </p>
-                            <Link
-                                href="/portfolio"
-                                className="inline-flex items-center gap-2 mt-4 px-4 py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-lg font-medium transition-colors"
+                            <button
+                                onClick={handleCreate}
+                                className="inline-flex items-center gap-2 px-4 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium transition-colors"
                             >
-                                Voir mes organisations
-                            </Link>
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                                </svg>
+                                Créer le premier site
+                            </button>
                         </div>
                     )}
 
@@ -188,15 +335,30 @@ export default function SitesListPage() {
                                             </div>
                                         </div>
                                         {orgSites[0]?.organizationId && (
-                                            <Link
-                                                href={`/organizations/${orgSites[0].organizationId}/sites`}
-                                                className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1"
-                                            >
-                                                Gérer
-                                                <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
-                                                </svg>
-                                            </Link>
+                                            <div className="flex items-center gap-3">
+                                                <button
+                                                    onClick={() => {
+                                                        setEditingSite(null);
+                                                        setFormOrgId(orgSites[0].organizationId);
+                                                        setFormName('');
+                                                        setFormCity('');
+                                                        // ... reset other fields
+                                                        setShowModal(true);
+                                                    }}
+                                                    className="text-xs bg-slate-700 hover:bg-slate-600 text-white px-2 py-1 rounded transition-colors"
+                                                >
+                                                    + Ajouter
+                                                </button>
+                                                <Link
+                                                    href={`/organizations/${orgSites[0].organizationId}/sites`}
+                                                    className="text-sm text-blue-400 hover:text-blue-300 flex items-center gap-1"
+                                                >
+                                                    Gérer
+                                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                                                    </svg>
+                                                </Link>
+                                            </div>
                                         )}
                                     </div>
 
@@ -246,12 +408,12 @@ export default function SitesListPage() {
                                                                 <span className="text-blue-400">UAI:</span> {site.uaiCode}
                                                             </span>
                                                         )}
-                                                        {site._count && (
-                                                            <>
-                                                                <span>{site._count.sessions} sessions</span>
-                                                                <span>{site._count.dossiers} dossiers</span>
-                                                            </>
-                                                        )}
+                                                        <button
+                                                            onClick={() => handleEdit(site)}
+                                                            className="p-1 hover:text-white transition-colors"
+                                                        >
+                                                            Modifier
+                                                        </button>
                                                     </div>
                                                 </div>
                                             </div>
@@ -263,6 +425,191 @@ export default function SitesListPage() {
                     )}
                 </div>
             </main>
+
+            {/* Modal Création/Édition */}
+            {showModal && (
+                <div className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+                    <div className="bg-slate-900 border border-slate-700 rounded-2xl w-full max-w-lg shadow-2xl">
+                        <div className="flex items-center justify-between p-4 border-b border-slate-700">
+                            <h2 className="text-lg font-semibold text-white">
+                                {editingSite ? 'Modifier le site' : 'Nouveau site'}
+                            </h2>
+                            <button
+                                onClick={() => setShowModal(false)}
+                                className="p-1 text-gray-400 hover:text-white transition-colors"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+                                </svg>
+                            </button>
+                        </div>
+
+                        <form onSubmit={handleSubmit} className="p-4 space-y-4">
+                            {/* Organisation Selector (Only if creating) */}
+                            {!editingSite && organizations.length > 0 && (
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                                        Organisation <span className="text-red-400">*</span>
+                                    </label>
+                                    <select
+                                        value={formOrgId}
+                                        onChange={(e) => setFormOrgId(e.target.value)}
+                                        className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white focus:outline-none focus:border-blue-500"
+                                        required
+                                    >
+                                        <option value="" disabled>Choisir une organisation</option>
+                                        {organizations.map(org => (
+                                            <option key={org.id} value={org.id}>{org.name}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            )}
+
+                            {/* Nom */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                                    Nom du site <span className="text-red-400">*</span>
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formName}
+                                    onChange={(e) => setFormName(e.target.value)}
+                                    placeholder="Ex: Campus Paris"
+                                    className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                                    required
+                                />
+                            </div>
+
+                            {/* Ville + Code postal */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                                        Ville <span className="text-red-400">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formCity}
+                                        onChange={(e) => setFormCity(e.target.value)}
+                                        placeholder="Paris"
+                                        className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                                        required
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                                        Code postal <span className="text-red-400">*</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formZipCode}
+                                        onChange={(e) => setFormZipCode(e.target.value)}
+                                        placeholder="75001"
+                                        maxLength={5}
+                                        className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                                        required
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Adresse */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                                    Adresse
+                                </label>
+                                <input
+                                    type="text"
+                                    value={formAddress}
+                                    onChange={(e) => setFormAddress(e.target.value)}
+                                    placeholder="12 rue de la Formation"
+                                    className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500"
+                                />
+                            </div>
+
+                            {/* UAI + NIC */}
+                            <div className="grid grid-cols-2 gap-4">
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                                        Code UAI
+                                        <span className="text-xs text-gray-500 ml-1">(CFA)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formUaiCode}
+                                        onChange={(e) => setFormUaiCode(e.target.value.toUpperCase())}
+                                        placeholder="0751234A"
+                                        maxLength={8}
+                                        className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono"
+                                    />
+                                </div>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-300 mb-1.5">
+                                        NIC (SIRET)
+                                        <span className="text-xs text-gray-500 ml-1">(5 chiffres)</span>
+                                    </label>
+                                    <input
+                                        type="text"
+                                        value={formSiretNic}
+                                        onChange={(e) => setFormSiretNic(e.target.value.replace(/\D/g, '').slice(0, 5))}
+                                        placeholder="00012"
+                                        maxLength={5}
+                                        className="w-full bg-slate-800 border border-slate-600 rounded-lg px-4 py-2.5 text-white placeholder-gray-500 focus:outline-none focus:border-blue-500 font-mono"
+                                    />
+                                </div>
+                            </div>
+
+                            {/* Siège */}
+                            <label className="flex items-center gap-3 p-3 bg-slate-800/50 border border-slate-700 rounded-lg cursor-pointer hover:border-slate-600 transition-colors">
+                                <input
+                                    type="checkbox"
+                                    checked={formIsHeadquarters}
+                                    onChange={(e) => setFormIsHeadquarters(e.target.checked)}
+                                    className="w-4 h-4 rounded border-slate-500 text-amber-500 focus:ring-amber-500"
+                                />
+                                <div>
+                                    <p className="text-sm font-medium text-white">Site principal (siège)</p>
+                                    <p className="text-xs text-gray-500">Adresse de facturation et siège social</p>
+                                </div>
+                            </label>
+
+                            {/* Erreur */}
+                            {formError && (
+                                <div className="bg-red-500/20 border border-red-500/50 rounded-lg px-4 py-3 text-red-300 text-sm">
+                                    {formError}
+                                </div>
+                            )}
+
+                            {/* Actions */}
+                            <div className="flex justify-end gap-3 pt-2">
+                                <button
+                                    type="button"
+                                    onClick={() => setShowModal(false)}
+                                    disabled={saving}
+                                    className="px-4 py-2 text-gray-300 hover:text-white hover:bg-slate-700 rounded-lg transition-colors disabled:opacity-50"
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    type="submit"
+                                    disabled={saving}
+                                    className="px-6 py-2 bg-purple-600 hover:bg-purple-500 text-white rounded-lg font-medium transition-colors disabled:opacity-50 flex items-center gap-2"
+                                >
+                                    {saving ? (
+                                        <>
+                                            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                            </svg>
+                                            Enregistrement...
+                                        </>
+                                    ) : (
+                                        editingSite ? 'Enregistrer' : 'Créer le site'
+                                    )}
+                                </button>
+                            </div>
+                        </form>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

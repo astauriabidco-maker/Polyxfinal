@@ -8,7 +8,7 @@
 
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 
 // Structure des menus
 interface MenuItem {
@@ -119,10 +119,10 @@ const MENU_SECTIONS: MenuSection[] = [
         items: [
             {
                 id: 'portfolio',
-                label: 'Tour de Contrôle',
+                label: 'Mes Organisations',
                 href: '/portfolio',
                 icon: Icons.grid,
-                description: 'Vue globale de toutes vos organisations',
+                description: 'Gérer vos organisations',
             },
             {
                 id: 'dashboard',
@@ -130,25 +130,6 @@ const MENU_SECTIONS: MenuSection[] = [
                 href: '/dashboard',
                 icon: Icons.chart,
                 description: 'Statistiques et KPIs',
-            },
-        ],
-    },
-    {
-        title: 'Organisations',
-        items: [
-            {
-                id: 'org-list',
-                label: 'Mes Organisations',
-                href: '/portfolio',
-                icon: Icons.building,
-                description: 'Liste de vos organisations',
-            },
-            {
-                id: 'org-new',
-                label: 'Nouvelle Organisation',
-                href: '/organizations/new',
-                icon: Icons.plus,
-                description: 'Créer une organisation',
             },
         ],
     },
@@ -162,12 +143,51 @@ const MENU_SECTIONS: MenuSection[] = [
                 icon: Icons.folder,
                 description: 'Gérer les dossiers de formation',
             },
+        ],
+    },
+    {
+        title: 'Administration',
+        items: [
+            {
+                id: 'org-list',
+                label: 'Organisations',
+                href: '/portfolio',
+                icon: Icons.building,
+                description: 'Gérer vos organisations',
+            },
             {
                 id: 'sites',
-                label: 'Sites / Agences',
+                label: 'Agences / Sites',
                 href: '/sites',
                 icon: Icons.mapPin,
                 description: 'Gérer vos campus et lieux',
+            },
+            {
+                id: 'users',
+                label: 'Utilisateurs',
+                href: '/users',
+                icon: Icons.users,
+                description: 'Gérer les accès utilisateurs',
+            },
+            {
+                id: 'roles',
+                label: 'Rôles & Permissions',
+                href: '/settings/roles',
+                icon: (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z" />
+                    </svg>
+                ),
+                description: 'Configurer les rôles et accès',
+            },
+            {
+                id: 'settings',
+                label: 'Paramètres',
+                href: '#',
+                icon: Icons.settings,
+                badge: 'Bientôt',
+                badgeColor: 'bg-slate-600',
+                description: 'Configuration générale',
             },
         ],
     },
@@ -284,36 +304,60 @@ const MENU_SECTIONS: MenuSection[] = [
             },
         ],
     },
-    {
-        title: 'Administration',
-        items: [
-            {
-                id: 'users',
-                label: 'Utilisateurs',
-                href: '/users',
-                icon: Icons.users,
-                description: 'Gérer les accès utilisateurs',
-            },
-            {
-                id: 'settings',
-                label: 'Paramètres',
-                href: '#',
-                icon: Icons.settings,
-                badge: 'Bientôt',
-                badgeColor: 'bg-slate-600',
-                description: 'Configuration générale',
-            },
-        ],
-    },
 ];
+
+// Mapping: sidebar menu item id → permission code
+const MENU_ITEM_PERMISSION_MAP: Record<string, string> = {
+    'portfolio': 'module:portfolio',
+    'dashboard': 'module:dashboard',
+    'dossiers': 'module:dossiers',
+    'org-list': 'module:organizations',
+    'sites': 'module:sites',
+    'users': 'module:users',
+    'roles': 'module:roles',
+    'settings': 'module:settings',
+    'compliance': 'module:compliance',
+    'qualiopi': 'module:qualiopi',
+    'rgpd-register': 'module:rgpd',
+    'partner-qualification': 'module:partner_qualification',
+    'dispatcher': 'module:dispatcher',
+    'my-leads': 'module:my_leads',
+    'leads': 'module:leads',
+    'partners': 'module:partners',
+    'lead-quality': 'module:lead_quality',
+    'network-config': 'module:network_config',
+    'candidates': 'module:candidates',
+    'dispatch': 'module:candidates', // same category as candidates
+    'territories': 'module:territories',
+    'royalties': 'module:royalties',
+};
 
 interface SidebarProps {
     defaultCollapsed?: boolean;
+    allowedModules?: string[]; // permission codes like ['module:dashboard', 'module:dossiers']
 }
 
-export default function Sidebar({ defaultCollapsed = false }: SidebarProps) {
+export default function Sidebar({ defaultCollapsed = false, allowedModules }: SidebarProps) {
     const pathname = usePathname();
     const [isCollapsed, setIsCollapsed] = useState(defaultCollapsed);
+
+    // Filter menu items based on permissions
+    const isItemAllowed = (itemId: string): boolean => {
+        // If no permission filter provided, show everything (backwards compatible)
+        if (!allowedModules) return true;
+        const permCode = MENU_ITEM_PERMISSION_MAP[itemId];
+        // Items without a permission mapping are always visible
+        if (!permCode) return true;
+        return allowedModules.includes(permCode);
+    };
+
+    // Filter sections: only show sections that have at least one visible item
+    const filteredSections = MENU_SECTIONS
+        .map(section => ({
+            ...section,
+            items: section.items.filter(item => isItemAllowed(item.id)),
+        }))
+        .filter(section => section.items.length > 0);
 
     const isActive = (href: string) => {
         if (href === '#') return false;
@@ -364,7 +408,7 @@ export default function Sidebar({ defaultCollapsed = false }: SidebarProps) {
 
             {/* Navigation */}
             <nav className="flex-1 overflow-y-auto py-4 px-2">
-                {MENU_SECTIONS.map((section, sectionIdx) => (
+                {filteredSections.map((section, sectionIdx) => (
                     <div key={section.title} className={sectionIdx > 0 ? 'mt-6' : ''}>
                         {/* Section Title */}
                         {!isCollapsed && (

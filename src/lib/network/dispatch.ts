@@ -4,10 +4,15 @@
  * Distribue automatiquement les dossiers (leads) du Siège
  * vers les franchisés selon leur zone géographique.
  * 
+ * RÈGLE NDA :
+ *   Le dossier RESTE rattaché au HEAD_OFFICE (organizationId inchangé)
+ *   car c'est lui qui porte le NDA. Le dispatch ne change que le `siteId`
+ *   pour pointer vers le site de l'agence franchisée.
+ * 
  * Algorithme:
  * 1. Le dossier arrive au HEAD_OFFICE
- * 2. On scanne les Territory des enfants
- * 3. Si match CP → transfert au franchisé
+ * 2. On scanne les Territory des enfants (franchisés)
+ * 3. Si match CP → assigne le siteId du franchisé
  * 4. Sinon → reste au siège (PENDING_ASSIGNMENT)
  */
 
@@ -18,9 +23,15 @@ import { prisma } from '@/lib/prisma';
 interface DispatchResult {
     matched: boolean;
     dossierId: string;
-    /** Org de destination (franchisé ou siège si pas de match) */
-    targetOrgId: string;
-    targetOrgName: string;
+    /** Org HEAD_OFFICE (inchangée — porteur du NDA) */
+    headOfficeId: string;
+    headOfficeName: string;
+    /** Franchise de destination (null si pas de match) */
+    targetFranchiseId?: string;
+    targetFranchiseName?: string;
+    /** Site assigné dans la franchise */
+    targetSiteId?: string;
+    targetSiteName?: string;
     /** Territoire trouvé (null si pas de match) */
     territoryId?: string;
     territoryName?: string;
@@ -31,6 +42,9 @@ interface DispatchResult {
 /**
  * Dispatche un dossier du siège vers le franchisé approprié
  * basé sur le code postal du stagiaire.
+ * 
+ * IMPORTANT : Le dossier reste rattaché au HEAD_OFFICE (organizationId).
+ * Seul le siteId est changé vers un site de la franchise.
  */
 export async function dispatchLead(
     dossierId: string,
@@ -62,8 +76,10 @@ export async function dispatchLead(
     }
 
     const headOfficeId = dossier.organization.id;
+    const headOfficeName = dossier.organization.name;
 
     // 3. Chercher les territoires des enfants (franchisés) qui couvrent ce CP
+    //    + charger les sites de la franchise pour le siteId
     const matchingTerritories = await prisma.territory.findMany({
         where: {
             isActive: true,
@@ -80,24 +96,43 @@ export async function dispatchLead(
                     id: true,
                     name: true,
                     networkType: true,
+                    sites: {
+                        where: { isActive: true },
+                        orderBy: { isHeadquarters: 'desc' },
+                        take: 1,
+                        select: { id: true, name: true },
+                    },
                 },
             },
         },
-        // Prendre le premier match (priorité au premier territoire trouvé)
         take: 1,
     });
 
-    // 4. Si match trouvé → transférer
+    // 4. Si match trouvé → assigner le site de la franchise
     if (matchingTerritories.length > 0) {
         const territory = matchingTerritories[0];
         const targetOrg = territory.organization;
+        const targetSite = targetOrg.sites[0];
+
+        if (!targetSite) {
+            console.warn(
+                `[Dispatch] ⚠️ Franchise "${targetOrg.name}" n'a pas de site actif — dossier reste au siège`
+            );
+            return {
+                matched: false,
+                dossierId,
+                headOfficeId,
+                headOfficeName,
+            };
+        }
 
         await prisma.$transaction(async (tx) => {
-            // Transférer le dossier
+            // Dispatch : changer le siteId (PAS l'organizationId !)
+            // Le dossier reste sous le HEAD_OFFICE qui porte le NDA
             await tx.dossier.update({
                 where: { id: dossierId },
                 data: {
-                    organizationId: targetOrg.id,
+                    siteId: targetSite.id,
                     source: 'NETWORK_DISPATCH',
                     dispatchedAt: new Date(),
                     dispatchedFromId: headOfficeId,
@@ -117,9 +152,11 @@ export async function dispatchLead(
                     entityType: 'Dossier',
                     entityId: dossierId,
                     newState: {
-                        from: headOfficeId,
-                        to: targetOrg.id,
-                        toName: targetOrg.name,
+                        headOfficeId,
+                        franchiseId: targetOrg.id,
+                        franchiseName: targetOrg.name,
+                        siteId: targetSite.id,
+                        siteName: targetSite.name,
                         zipCode: studentZipCode,
                         territoryId: territory.id,
                         territoryName: territory.name,
@@ -129,14 +166,18 @@ export async function dispatchLead(
         });
 
         console.log(
-            `[Dispatch] ✅ Dossier ${dossierId} transféré: ${dossier.organization.name} → ${targetOrg.name} (CP: ${studentZipCode})`
+            `[Dispatch] ✅ Dossier ${dossierId} dispatché: site "${targetSite.name}" (${targetOrg.name}) — CP: ${studentZipCode} — Org reste: ${headOfficeName}`
         );
 
         return {
             matched: true,
             dossierId,
-            targetOrgId: targetOrg.id,
-            targetOrgName: targetOrg.name,
+            headOfficeId,
+            headOfficeName,
+            targetFranchiseId: targetOrg.id,
+            targetFranchiseName: targetOrg.name,
+            targetSiteId: targetSite.id,
+            targetSiteName: targetSite.name,
             territoryId: territory.id,
             territoryName: territory.name,
         };
@@ -158,8 +199,8 @@ export async function dispatchLead(
     return {
         matched: false,
         dossierId,
-        targetOrgId: headOfficeId,
-        targetOrgName: dossier.organization.name,
+        headOfficeId,
+        headOfficeName,
     };
 }
 

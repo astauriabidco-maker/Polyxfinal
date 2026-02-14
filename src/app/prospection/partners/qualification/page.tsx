@@ -20,7 +20,8 @@ export default async function QualificationPage() {
         redirect('/login');
     }
 
-    const { role } = session.user;
+    const { role: roleObj } = session.user;
+    const role = typeof roleObj === 'string' ? roleObj : (roleObj as any)?.code || 'UNKNOWN';
     if (!['ADMIN', 'RESP_ADMIN'].includes(role)) {
         redirect('/prospection');
     }

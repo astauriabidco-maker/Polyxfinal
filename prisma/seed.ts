@@ -11,13 +11,13 @@
 
 import {
     PrismaClient,
-    Role,
     OrganizationType,
     MembershipScope,
     PhaseStatus,
     TypeFinanceur,
     NetworkType
 } from '@prisma/client';
+import { ROLE_IDS } from '../src/lib/constants/roles';
 import bcrypt from 'bcryptjs';
 import { dispatchLead } from '../src/lib/network/dispatch';
 
@@ -28,6 +28,8 @@ async function main() {
 
     // 1. Nettoyage complet (ordre inverse des dépendances)
     console.log('🧹 Nettoyage de la base de données...');
+    await prisma.rolePermission.deleteMany();
+    await prisma.permission.deleteMany();
     await prisma.auditLog.deleteMany();
     await prisma.complianceAlert.deleteMany();
     await prisma.evaluation.deleteMany();
@@ -49,6 +51,138 @@ async function main() {
     await prisma.site.deleteMany();
     await prisma.user.deleteMany();
     await prisma.organization.deleteMany();
+
+    // 1b. Seed des Rôles Système (upsert pour idempotence)
+    console.log('🛡️ Création des rôles système...');
+    const systemRoles = [
+        { id: ROLE_IDS.ADMIN, code: 'ADMIN', name: 'Administrateur', description: 'Accès complet à toutes les fonctionnalités' },
+        { id: ROLE_IDS.RESP_PEDAGO, code: 'RESP_PEDAGO', name: 'Responsable Pédagogique', description: 'Gestion pédagogique et suivi des formateurs' },
+        { id: ROLE_IDS.RESP_ADMIN, code: 'RESP_ADMIN', name: 'Responsable Administratif', description: 'Gestion administrative et financière' },
+        { id: ROLE_IDS.REF_QUALITE, code: 'REF_QUALITE', name: 'Référent Qualité', description: 'Suivi qualité et conformité Qualiopi' },
+        { id: ROLE_IDS.FORMAT, code: 'FORMAT', name: 'Formateur', description: 'Saisie assiduité et suivi stagiaires' },
+    ];
+
+    for (const role of systemRoles) {
+        await prisma.role.upsert({
+            where: { id: role.id },
+            update: { name: role.name, description: role.description },
+            create: {
+                id: role.id,
+                code: role.code,
+                name: role.name,
+                description: role.description,
+                isSystem: true,
+                organizationId: null,
+            },
+        });
+    }
+    console.log(`   ✅ ${systemRoles.length} rôles système créés/mis à jour`);
+
+    // 1c. Seed des Permissions (modules de l'application)
+    console.log('🔐 Création des permissions modules...');
+    const modulePermissions = [
+        // Vue d'ensemble
+        { code: 'module:portfolio', description: 'Mes Organisations', category: 'Vue d\'ensemble' },
+        { code: 'module:dashboard', description: 'Tableau de Bord', category: 'Vue d\'ensemble' },
+        // Gestion Opérationnelle
+        { code: 'module:dossiers', description: 'Dossiers Stagiaires', category: 'Gestion Opérationnelle' },
+        // Administration
+        { code: 'module:organizations', description: 'Organisations', category: 'Administration' },
+        { code: 'module:sites', description: 'Agences / Sites', category: 'Administration' },
+        { code: 'module:users', description: 'Utilisateurs', category: 'Administration' },
+        { code: 'module:roles', description: 'Rôles & Permissions', category: 'Administration' },
+        { code: 'module:settings', description: 'Paramètres', category: 'Administration' },
+        // Conformité & Qualité
+        { code: 'module:compliance', description: 'Moteur de Règles', category: 'Conformité & Qualité' },
+        { code: 'module:qualiopi', description: 'Suivi Qualiopi', category: 'Conformité & Qualité' },
+        { code: 'module:rgpd', description: 'Registre RGPD', category: 'Conformité & Qualité' },
+        { code: 'module:partner_qualification', description: 'Qualification Partenaires', category: 'Conformité & Qualité' },
+        // Prospection
+        { code: 'module:dispatcher', description: 'Dispatcher', category: 'Prospection' },
+        { code: 'module:my_leads', description: 'Mes Leads', category: 'Prospection' },
+        { code: 'module:leads', description: 'Pipeline Leads', category: 'Prospection' },
+        { code: 'module:partners', description: 'Partenaires API', category: 'Prospection' },
+        { code: 'module:lead_quality', description: 'Qualité Leads', category: 'Prospection' },
+        { code: 'module:network_config', description: 'Configuration Réseau', category: 'Prospection' },
+        // Réseau Franchise
+        { code: 'module:candidates', description: 'Candidats Franchise', category: 'Réseau Franchise' },
+        { code: 'module:territories', description: 'Territoires', category: 'Réseau Franchise' },
+        { code: 'module:royalties', description: 'Redevances', category: 'Réseau Franchise' },
+    ];
+
+    const createdPermissions: Record<string, string> = {};
+    for (const perm of modulePermissions) {
+        const p = await prisma.permission.upsert({
+            where: { code: perm.code },
+            update: { description: perm.description, category: perm.category },
+            create: perm,
+        });
+        createdPermissions[perm.code] = p.id;
+    }
+    console.log(`   ✅ ${modulePermissions.length} permissions modules créées`);
+
+    // 1d. Assignation des permissions par défaut aux rôles système
+    console.log('🔗 Assignation des permissions par défaut...');
+    const allPermIds = Object.values(createdPermissions);
+
+    // ADMIN → toutes les permissions
+    for (const permId of allPermIds) {
+        await prisma.rolePermission.upsert({
+            where: { roleId_permissionId: { roleId: ROLE_IDS.ADMIN, permissionId: permId } },
+            update: {},
+            create: { roleId: ROLE_IDS.ADMIN, permissionId: permId },
+        });
+    }
+
+    // RESP_PEDAGO → Dossiers, Dashboard, Conformité, pas Administration ni Prospection
+    const respPedagoModules = ['module:portfolio', 'module:dashboard', 'module:dossiers', 'module:compliance', 'module:qualiopi'];
+    for (const code of respPedagoModules) {
+        if (createdPermissions[code]) {
+            await prisma.rolePermission.upsert({
+                where: { roleId_permissionId: { roleId: ROLE_IDS.RESP_PEDAGO, permissionId: createdPermissions[code] } },
+                update: {},
+                create: { roleId: ROLE_IDS.RESP_PEDAGO, permissionId: createdPermissions[code] },
+            });
+        }
+    }
+
+    // RESP_ADMIN → Dashboard, Dossiers, Administration (partiel), Conformité
+    const respAdminModules = ['module:portfolio', 'module:dashboard', 'module:dossiers', 'module:organizations', 'module:sites', 'module:users', 'module:compliance', 'module:qualiopi', 'module:rgpd'];
+    for (const code of respAdminModules) {
+        if (createdPermissions[code]) {
+            await prisma.rolePermission.upsert({
+                where: { roleId_permissionId: { roleId: ROLE_IDS.RESP_ADMIN, permissionId: createdPermissions[code] } },
+                update: {},
+                create: { roleId: ROLE_IDS.RESP_ADMIN, permissionId: createdPermissions[code] },
+            });
+        }
+    }
+
+    // REF_QUALITE → Dashboard, Conformité complète
+    const refQualiteModules = ['module:portfolio', 'module:dashboard', 'module:dossiers', 'module:compliance', 'module:qualiopi', 'module:rgpd', 'module:partner_qualification'];
+    for (const code of refQualiteModules) {
+        if (createdPermissions[code]) {
+            await prisma.rolePermission.upsert({
+                where: { roleId_permissionId: { roleId: ROLE_IDS.REF_QUALITE, permissionId: createdPermissions[code] } },
+                update: {},
+                create: { roleId: ROLE_IDS.REF_QUALITE, permissionId: createdPermissions[code] },
+            });
+        }
+    }
+
+    // FORMAT → Dashboard, Dossiers seulement
+    const formatModules = ['module:portfolio', 'module:dashboard', 'module:dossiers'];
+    for (const code of formatModules) {
+        if (createdPermissions[code]) {
+            await prisma.rolePermission.upsert({
+                where: { roleId_permissionId: { roleId: ROLE_IDS.FORMAT, permissionId: createdPermissions[code] } },
+                update: {},
+                create: { roleId: ROLE_IDS.FORMAT, permissionId: createdPermissions[code] },
+            });
+        }
+    }
+
+    console.log('   ✅ Permissions par défaut assignées aux rôles système');
 
     // 2. Création du Super User
     const hashedPassword = await bcrypt.hash('password123', 10);
@@ -107,9 +241,9 @@ async function main() {
     // Membership GLOBAL (Voit Paris ET Lyon)
     await prisma.membership.create({
         data: {
-            userId: superUser.id,
-            organizationId: orgCfa.id,
-            role: Role.ADMIN,
+            user: { connect: { id: superUser.id } },
+            organization: { connect: { id: orgCfa.id } },
+            role: { connect: { id: ROLE_IDS.ADMIN } },
             scope: MembershipScope.GLOBAL,
             isActive: true,
         }
@@ -243,9 +377,9 @@ async function main() {
     // Jean-Michel est responsable pédagogique, mais juste à Marseille.
     const membershipOF = await prisma.membership.create({
         data: {
-            userId: superUser.id,
-            organizationId: orgOfReseau.id,
-            role: Role.RESP_PEDAGO,
+            user: { connect: { id: superUser.id } },
+            organization: { connect: { id: orgOfReseau.id } },
+            role: { connect: { id: ROLE_IDS.RESP_PEDAGO } },
             scope: MembershipScope.RESTRICTED,
             isActive: true,
         }
@@ -382,9 +516,9 @@ async function main() {
     // Membership GLOBAL Admin
     await prisma.membership.create({
         data: {
-            userId: superUser.id,
-            organizationId: orgNewbie.id,
-            role: Role.ADMIN,
+            user: { connect: { id: superUser.id } },
+            organization: { connect: { id: orgNewbie.id } },
+            role: { connect: { id: ROLE_IDS.ADMIN } },
             scope: MembershipScope.GLOBAL,
             isActive: true,
         }
@@ -498,9 +632,9 @@ async function main() {
     // Membership ADMIN pour le super user au siège
     await prisma.membership.create({
         data: {
-            userId: superUser.id,
-            organizationId: orgSiege.id,
-            role: Role.ADMIN,
+            user: { connect: { id: superUser.id } },
+            organization: { connect: { id: orgSiege.id } },
+            role: { connect: { id: ROLE_IDS.ADMIN } },
             scope: MembershipScope.GLOBAL,
             isActive: true,
         }
@@ -545,9 +679,9 @@ async function main() {
 
     await prisma.membership.create({
         data: {
-            userId: franchiseAdmin.id,
-            organizationId: orgFranchiseLyon.id,
-            role: Role.ADMIN,
+            user: { connect: { id: franchiseAdmin.id } },
+            organization: { connect: { id: orgFranchiseLyon.id } },
+            role: { connect: { id: ROLE_IDS.ADMIN } },
             scope: MembershipScope.GLOBAL,
             isActive: true,
         }

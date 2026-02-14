@@ -40,7 +40,8 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
         }
 
-        const { id: userId, organizationId, role, nom, prenom } = session.user;
+        const { id: userId, organizationId, role: roleObj, nom, prenom } = session.user;
+        const role = typeof roleObj === 'string' ? roleObj : (roleObj as any)?.code || 'UNKNOWN';
 
         // RBAC : ADMIN ou RESP_ADMIN requis
         if (!['ADMIN', 'RESP_ADMIN'].includes(role)) {
@@ -310,7 +311,8 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
         }
 
-        const { id: userId, organizationId, role, nom, prenom } = session.user;
+        const { id: userId, organizationId, role: roleObj, nom, prenom } = session.user;
+        const role = typeof roleObj === 'string' ? roleObj : (roleObj as any)?.code || 'UNKNOWN';
 
         if (!['ADMIN', 'RESP_ADMIN'].includes(role)) {
             return NextResponse.json(

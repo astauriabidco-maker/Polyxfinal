@@ -27,7 +27,7 @@ export async function POST(
     }
 
     // Vérifier le rôle ADMIN
-    if (session.user.role !== 'ADMIN') {
+    if (session.user.role.code !== 'ADMIN') {
         return NextResponse.json({ error: 'Accès réservé aux administrateurs' }, { status: 403 });
     }
 

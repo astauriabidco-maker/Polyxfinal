@@ -11,6 +11,7 @@ import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import UserList from '@/components/users/UserList';
+import { SystemRoleCode } from '@/lib/constants/roles';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,9 +42,10 @@ export default async function UsersPage() {
                 organizationId,
             },
         },
+        include: { role: true },
     });
 
-    const isAdmin = currentMembership?.role === 'ADMIN';
+    const isAdmin = currentMembership?.role.code === 'ADMIN';
 
     // Récupérer les membres de l'organisation
     const memberships = await prisma.membership.findMany({
@@ -52,6 +54,7 @@ export default async function UsersPage() {
             isActive: true,
         },
         include: {
+            role: true,
             user: {
                 select: {
                     id: true,
@@ -86,6 +89,19 @@ export default async function UsersPage() {
         orderBy: { name: 'asc' },
     });
 
+    // Récupérer les rôles disponibles (Système + Org)
+    const availableRoles = await prisma.role.findMany({
+        where: {
+            OR: [
+                { organizationId: null },           // Rôles système globaux
+                { organizationId: organizationId }, // Rôles spécifiques à l'org
+            ],
+        },
+        orderBy: {
+            isSystem: 'desc', // Système d'abord, puis custom
+        },
+    });
+
     // Formater les données utilisateurs
     const users = memberships.map((m) => ({
         id: m.user.id,
@@ -93,9 +109,9 @@ export default async function UsersPage() {
         nom: m.user.nom,
         prenom: m.user.prenom,
         telephone: m.user.telephone,
-        role: m.role,
-        roleLabel: ROLE_LABELS[m.role]?.label || m.role,
-        roleColor: ROLE_LABELS[m.role]?.color || ROLE_LABELS['FORMAT'].color,
+        role: m.role.code,
+        roleLabel: ROLE_LABELS[m.role.code as SystemRoleCode]?.label || m.role.name,
+        roleColor: ROLE_LABELS[m.role.code as SystemRoleCode]?.color || ROLE_LABELS['FORMAT'].color,
         scope: m.scope,
         sites: m.siteAccess.map((sa) => sa.site),
         isActive: m.user.isActive && m.isActive,
@@ -149,8 +165,10 @@ export default async function UsersPage() {
                     <UserList
                         users={users}
                         sites={sites}
+                        availableRoles={availableRoles}
                         isAdmin={isAdmin}
                         currentUserId={currentUserId}
+                        organizationId={organizationId}
                     />
                 </main>
             </div>

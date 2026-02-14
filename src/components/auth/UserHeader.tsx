@@ -50,8 +50,10 @@ export default async function UserHeader() {
 
     const { nom, prenom, role, email, organizationName, organizationType, memberships } = session.user as any;
     const siteName = (session.user as any).siteName;
-    const roleColor = ROLE_COLORS[role] || 'bg-slate-600';
-    const roleLabel = ROLE_LABELS[role] || role;
+    // role is now a Role model object with {id, code, name, ...}, not a string enum
+    const roleCode = typeof role === 'string' ? role : role?.code || 'UNKNOWN';
+    const roleColor = ROLE_COLORS[roleCode] || 'bg-slate-600';
+    const roleLabel = ROLE_LABELS[roleCode] || (typeof role === 'string' ? role : role?.name || roleCode);
     const orgTypeLabel = ORG_TYPE_LABELS[organizationType] || organizationType;
     const orgTypeColor = ORG_TYPE_COLORS[organizationType] || 'bg-slate-500';
 

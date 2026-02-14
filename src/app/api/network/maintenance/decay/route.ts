@@ -17,7 +17,7 @@ export async function POST(request: NextRequest) {
         return NextResponse.json({ error: 'Accès non autorisé' }, { status: 401 });
     }
 
-    if (session && session.user.role !== 'ADMIN' && !isCron) {
+    if (session && session.user.role.code !== 'ADMIN' && !isCron) {
         return NextResponse.json({ error: 'Droits insuffisants' }, { status: 403 });
     }
 

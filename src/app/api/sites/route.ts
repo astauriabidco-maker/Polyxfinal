@@ -56,7 +56,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Seuls les ADMIN peuvent créer des sites
-        if (membership.role !== 'ADMIN') {
+        if (membership.role.code !== 'ADMIN') {
             return NextResponse.json(
                 { error: 'Seuls les administrateurs peuvent créer des sites' },
                 { status: 403 }
@@ -112,7 +112,7 @@ export async function POST(request: NextRequest) {
             data: {
                 organizationId,
                 userId: session.user.id!,
-                userRole: membership.role,
+                userRole: membership.role.code,
                 action: 'CREATE_SITE',
                 niveauAction: 'EDITION',
                 entityType: 'Site',

@@ -6,6 +6,7 @@
  */
 
 import { Role, OrganizationType, MembershipScope } from '@prisma/client';
+import { SystemRoleCode } from '@/lib/constants/roles';
 
 // Type pour un site accessible
 export interface AccessibleSite {
@@ -18,7 +19,7 @@ export interface MembershipInfo {
     organizationId: string;
     organizationName: string;
     organizationType: OrganizationType;
-    role: Role;
+    role: Role; // Full Role object
     scope: MembershipScope;
     accessibleSites: AccessibleSite[];
 }
@@ -31,7 +32,7 @@ declare module 'next-auth' {
         prenom: string;
         // Current membership context
         currentMembershipId: string;
-        role: Role;
+        role: Role; // Full Role object
         organizationId: string;
         organizationType: OrganizationType;
         organizationName: string;
@@ -48,7 +49,7 @@ declare module 'next-auth' {
             prenom: string;
             // Current membership context
             currentMembershipId: string;
-            role: Role;
+            role: Role; // Full Role object
             organizationId: string;
             organizationType: OrganizationType;
             organizationName: string;
@@ -66,7 +67,7 @@ declare module '@auth/core/jwt' {
         prenom: string;
         // Current membership context
         currentMembershipId: string;
-        role: Role;
+        role: Role; // Full Role object
         organizationId: string;
         organizationType: OrganizationType;
         organizationName: string;
@@ -80,12 +81,12 @@ declare module '@auth/core/jwt' {
 export type RBACLevel = 'LECTURE' | 'EDITION' | 'VALIDATION' | 'FORCAGE';
 
 export interface RBACPermission {
-    roles: Role[];
+    roles: SystemRoleCode[];
     level: RBACLevel;
 }
 
 // Mapping des transitions vers les rôles autorisés (basé sur rbac_matrix.md)
-export const TRANSITION_PERMISSIONS: Record<string, Role[]> = {
+export const TRANSITION_PERMISSIONS: Record<string, SystemRoleCode[]> = {
     // PHASE 2: ADMISSION
     'TO_ADMIS': ['RESP_PEDAGO', 'ADMIN'], // Valider admission
     'FORCE_ADMISSION': ['RESP_PEDAGO', 'ADMIN'], // Forcer admission
@@ -115,7 +116,8 @@ export function canPerformAction(role: Role, action: string): boolean {
     const allowedRoles = TRANSITION_PERMISSIONS[action];
     if (!allowedRoles) {
         // Action non définie = Admin only
-        return role === 'ADMIN';
+        return role.code === 'ADMIN';
     }
-    return allowedRoles.includes(role);
+    // Check if role.code is in allowedRoles (casted to string for safety)
+    return allowedRoles.includes(role.code as SystemRoleCode);
 }

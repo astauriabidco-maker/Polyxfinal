@@ -10,10 +10,11 @@
 import { auth } from '@/auth';
 import { NextResponse } from 'next/server';
 import type { Role } from '@prisma/client';
+import { SystemRoleCode } from '@/lib/constants/roles';
 
 // ─── Routes RBAC ──────────────────────────────────────────────
 
-const PROTECTED_ROUTES: Record<string, Role[]> = {
+const PROTECTED_ROUTES: Record<string, SystemRoleCode[]> = {
     // Admin only
     '/admin': ['ADMIN'],
     '/admin/users': ['ADMIN'],
@@ -109,8 +110,8 @@ export default auth((req) => {
     // Vérifier les permissions RBAC
     for (const [route, allowedRoles] of Object.entries(PROTECTED_ROUTES)) {
         if (nextUrl.pathname === route || nextUrl.pathname.startsWith(route + '/')) {
-            if (userRole && !allowedRoles.includes(userRole)) {
-                console.log(`[RBAC] Access denied: ${userRole} → ${nextUrl.pathname}`);
+            if (userRole && !allowedRoles.includes(userRole.code as SystemRoleCode)) {
+                console.log(`[RBAC] Access denied: ${userRole.code} → ${nextUrl.pathname}`);
                 return NextResponse.redirect(new URL('/dashboard?error=forbidden', nextUrl));
             }
             break;

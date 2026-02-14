@@ -59,7 +59,9 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                 nom: membership.user.nom,
                 prenom: membership.user.prenom,
                 telephone: membership.user.telephone,
-                role: membership.role,
+                telephone: membership.user.telephone,
+                role: membership.role.code,
+                roleLabel: membership.role.name,
                 scope: membership.scope,
                 sites: membership.siteAccess.map((sa) => sa.site),
                 isActive: membership.isActive,
@@ -91,9 +93,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
                     organizationId: session.user.organizationId,
                 },
             },
+            include: { role: true },
         });
 
-        if (currentMembership?.role !== 'ADMIN') {
+        if (currentMembership?.role.code !== 'ADMIN') {
             return NextResponse.json(
                 { error: 'Seul un ADMIN peut modifier les utilisateurs' },
                 { status: 403 }
@@ -105,6 +108,27 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         const body = await request.json();
         const { role, scope, siteIds } = body;
 
+        // Trouver le rôle correspondant au code s'il est fourni
+        let roleUpdate = {};
+        if (role) {
+            const targetRole = await prisma.role.findFirst({
+                where: {
+                    OR: [
+                        { code: role, organizationId: null },
+                        { code: role, organizationId },
+                    ],
+                },
+            });
+
+            if (!targetRole) {
+                return NextResponse.json(
+                    { error: `Rôle invalide: ${role}` },
+                    { status: 400 }
+                );
+            }
+            roleUpdate = { role: { connect: { id: targetRole.id } } };
+        }
+
         // Mettre à jour le membership
         const updatedMembership = await prisma.membership.update({
             where: {
@@ -114,9 +138,10 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
                 },
             },
             data: {
-                role: role as Role,
+                ...roleUpdate,
                 scope: scope as MembershipScope,
             },
+            include: { role: true },
         });
 
         // Mettre à jour les accès sites si scope RESTRICTED
@@ -145,7 +170,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         await prisma.auditLog.create({
             data: {
                 userId: session.user.id,
-                userRole: currentMembership.role,
+                userRole: currentMembership.role.code,
                 organizationId,
                 action: 'USER_UPDATE',
                 entityType: 'User',
@@ -183,9 +208,10 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
                     organizationId: session.user.organizationId,
                 },
             },
+            include: { role: true },
         });
 
-        if (currentMembership?.role !== 'ADMIN') {
+        if (currentMembership?.role.code !== 'ADMIN') {
             return NextResponse.json(
                 { error: 'Seul un ADMIN peut désactiver des utilisateurs' },
                 { status: 403 }
@@ -220,7 +246,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         await prisma.auditLog.create({
             data: {
                 userId: session.user.id,
-                userRole: currentMembership.role,
+                userRole: currentMembership.role.code,
                 organizationId,
                 action: 'USER_DEACTIVATE',
                 entityType: 'User',

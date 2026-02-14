@@ -62,7 +62,9 @@ export async function promoteDossier(
         throw new Error('Non authentifié. Veuillez vous connecter.');
     }
 
-    const { id: userId, role: userRole, nom, prenom } = session.user;
+    const { id: userId, role: userRoleRaw, nom, prenom } = session.user;
+    // role is now a Role model object with {id, code, name, ...}, not a string enum
+    const userRole = typeof userRoleRaw === 'string' ? userRoleRaw : userRoleRaw?.code || 'UNKNOWN';
     const now = new Date();
 
     // ========================================
@@ -129,7 +131,7 @@ export async function promoteDossier(
             entityId: dossierId,
             action: 'STATUS_CHANGE',
             userId: userId,
-            userRole: userRole as Role,
+            userRole: userRole,
             niveauAction: 'VALIDATION',
             newState: {
                 from: currentStatus,

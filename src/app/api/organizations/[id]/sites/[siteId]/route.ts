@@ -96,7 +96,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         const memberships = session.user.memberships || [];
         const membership = memberships.find(m => m.organizationId === id);
 
-        if (!membership || membership.role !== 'ADMIN') {
+        if (!membership || membership.role.code !== 'ADMIN') {
             return NextResponse.json(
                 { error: 'Droits insuffisants' },
                 { status: 403 }
@@ -187,7 +187,7 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
             data: {
                 organizationId: id,
                 userId: session.user.id!,
-                userRole: membership.role,
+                userRole: membership.role.code,
                 action: 'UPDATE_SITE',
                 niveauAction: 'EDITION',
                 entityType: 'Site',
@@ -233,7 +233,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
         const memberships = session.user.memberships || [];
         const membership = memberships.find(m => m.organizationId === id);
 
-        if (!membership || membership.role !== 'ADMIN') {
+        if (!membership || membership.role.code !== 'ADMIN') {
             return NextResponse.json(
                 { error: 'Droits insuffisants' },
                 { status: 403 }
@@ -278,7 +278,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             data: {
                 organizationId: id,
                 userId: session.user.id!,
-                userRole: membership.role,
+                userRole: membership.role.code,
                 action: 'DELETE_SITE',
                 niveauAction: 'SUPPRESSION',
                 entityType: 'Site',

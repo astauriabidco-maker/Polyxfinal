@@ -8,7 +8,7 @@
 export interface EmailOptions {
     to: string;
     subject: string;
-    template: 'PARTNER_ONBOARDING' | 'PARTNER_ACTIVATED';
+    template: 'PARTNER_ONBOARDING' | 'PARTNER_ACTIVATED' | 'USER_INVITATION' | 'USER_ADDED_TO_ORG';
     data: any;
 }
 
@@ -44,6 +44,36 @@ export async function sendTransactionalEmail(options: EmailOptions) {
             .replace('{{contactName}}', options.data.contactName)
             .replace('{{apiKey}}', options.data.apiKey)
             .replace('{{docsUrl}}', docsUrl);
+    }
+
+    if (options.template === 'USER_INVITATION') {
+        const loginUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/login`;
+
+        subject = options.subject || `Bienvenue sur Polyx ERP — Vos identifiants de connexion`;
+        body = `Bonjour ${options.data.prenom} ${options.data.nom},\n\n` +
+            `Vous avez été invité(e) à rejoindre l'organisation "${options.data.organizationName}" sur Polyx ERP.\n\n` +
+            `Votre rôle : ${options.data.roleName}\n\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `  VOS IDENTIFIANTS\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n` +
+            `  Email : ${options.data.email}\n` +
+            `  Mot de passe : ${options.data.password}\n` +
+            `━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n` +
+            `🔗 Connectez-vous ici : ${loginUrl}\n\n` +
+            `⚠️ Nous vous recommandons de changer votre mot de passe après votre première connexion.\n` +
+            `   Rendez-vous dans Paramètres > Mot de passe.\n\n` +
+            `Cordialement,\nL'équipe Polyx ERP`;
+    }
+
+    if (options.template === 'USER_ADDED_TO_ORG') {
+        const loginUrl = `${process.env.NEXTAUTH_URL || 'http://localhost:3000'}/login`;
+
+        subject = options.subject || `Polyx ERP — Vous avez été ajouté(e) à une nouvelle organisation`;
+        body = `Bonjour ${options.data.prenom} ${options.data.nom},\n\n` +
+            `Vous avez été ajouté(e) à l'organisation "${options.data.organizationName}" sur Polyx ERP.\n\n` +
+            `Votre rôle : ${options.data.roleName}\n\n` +
+            `Connectez-vous avec vos identifiants habituels : ${loginUrl}\n\n` +
+            `Cordialement,\nL'équipe Polyx ERP`;
     }
 
     console.log('\n--- [EMAIL SERVICE DYNAMIQUE] ---');

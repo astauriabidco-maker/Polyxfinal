@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { Role, MembershipScope } from '@prisma/client';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 /**
  * GET /api/users
@@ -30,6 +32,7 @@ export async function GET(request: NextRequest) {
                 isActive: true,
             },
             include: {
+                role: true,
                 user: {
                     select: {
                         id: true,
@@ -64,7 +67,8 @@ export async function GET(request: NextRequest) {
             nom: m.user.nom,
             prenom: m.user.prenom,
             telephone: m.user.telephone,
-            role: m.role,
+            role: m.role.code,
+            roleLabel: m.role.name,
             scope: m.scope,
             sites: m.siteAccess.map((sa) => sa.site),
             isActive: m.user.isActive && m.isActive,
@@ -84,49 +88,60 @@ export async function GET(request: NextRequest) {
 
 /**
  * POST /api/users
- * Créer un nouvel utilisateur avec membership
+ * Créer un nouvel utilisateur avec membership + invitation email
  */
 export async function POST(request: NextRequest) {
     try {
         const session = await auth();
-        if (!session?.user?.organizationId) {
+        if (!session?.user?.id) {
             return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
         }
 
-        // Vérifier que l'utilisateur est ADMIN
+        const body = await request.json();
+        const { email, nom, prenom, telephone, role, scope, siteIds, organizationId } = body;
+
+        console.log('DEBUG POST /api/users:', { email, role, scope, organizationId, sessionOrgId: session.user.organizationId });
+
+        // Validation de base
+        if (!organizationId) {
+            console.error('DEBUG Error: Organization ID missing');
+            return NextResponse.json({ error: 'Organization ID requis' }, { status: 400 });
+        }
+        if (!email || !nom || !prenom) {
+            return NextResponse.json({ error: 'Email, nom et prénom sont requis' }, { status: 400 });
+        }
+
+        // Vérifier que l'utilisateur courant est ADMIN de l'organisation CIBLE
         const currentMembership = await prisma.membership.findUnique({
             where: {
                 userId_organizationId: {
                     userId: session.user.id,
-                    organizationId: session.user.organizationId,
+                    organizationId: organizationId,
                 },
             },
+            include: { role: true },
         });
 
-        if (currentMembership?.role !== 'ADMIN') {
+        if (!currentMembership || currentMembership.role.code !== 'ADMIN') {
             return NextResponse.json(
-                { error: 'Seul un ADMIN peut créer des utilisateurs' },
+                { error: 'Droits insuffisants pour cette organisation' },
                 { status: 403 }
             );
         }
 
-        const body = await request.json();
-        const { email, nom, prenom, telephone, role, scope, siteIds } = body;
-
-        // Validation
-        if (!email || !nom || !prenom) {
-            return NextResponse.json(
-                { error: 'Email, nom et prénom sont requis' },
-                { status: 400 }
-            );
-        }
-
-        const organizationId = session.user.organizationId;
+        // Récupérer le nom de l'organisation pour l'email
+        const organization = await prisma.organization.findUnique({
+            where: { id: organizationId },
+            select: { name: true },
+        });
 
         // Vérifier si l'utilisateur existe déjà
         let user = await prisma.user.findUnique({
             where: { email },
         });
+
+        let isNewUser = false;
+        let generatedPassword: string | null = null;
 
         if (user) {
             // Vérifier s'il a déjà un membership dans cette org
@@ -146,27 +161,52 @@ export async function POST(request: NextRequest) {
                 );
             }
         } else {
-            // Créer le nouvel utilisateur
+            // Générer un mot de passe temporaire sécurisé
+            generatedPassword = generateSecurePassword(12);
+            const hashedPassword = await bcrypt.hash(generatedPassword, 10);
+
+            // Créer le nouvel utilisateur avec mot de passe
             user = await prisma.user.create({
                 data: {
                     email,
                     nom,
                     prenom,
                     telephone: telephone || null,
+                    passwordHash: hashedPassword,
                     isActive: true,
                 },
             });
+            isNewUser = true;
+        }
+
+        // Trouver le rôle correspondant au code dans le contexte de l'org
+        const targetRoleCode = role || 'FORMAT';
+        const targetRole = await prisma.role.findFirst({
+            where: {
+                OR: [
+                    { code: targetRoleCode, organizationId: null }, // Rôle système
+                    { code: targetRoleCode, organizationId },       // Rôle custom de cette org
+                ],
+            },
+        });
+
+        if (!targetRole) {
+            return NextResponse.json(
+                { error: `Rôle invalide: ${targetRoleCode}` },
+                { status: 400 }
+            );
         }
 
         // Créer le membership
         const membership = await prisma.membership.create({
             data: {
-                userId: user.id,
-                organizationId,
-                role: (role as Role) || 'FORMAT',
+                user: { connect: { id: user.id } },
+                organization: { connect: { id: organizationId } },
+                role: { connect: { id: targetRole.id } },
                 scope: (scope as MembershipScope) || 'GLOBAL',
                 isActive: true,
             },
+            include: { role: true },
         });
 
         // Si scope RESTRICTED et siteIds fournis, créer les accès
@@ -184,7 +224,7 @@ export async function POST(request: NextRequest) {
         await prisma.auditLog.create({
             data: {
                 userId: session.user.id,
-                userRole: currentMembership.role,
+                userRole: currentMembership.role.code,
                 organizationId,
                 action: 'USER_CREATE',
                 entityType: 'User',
@@ -193,6 +233,46 @@ export async function POST(request: NextRequest) {
             },
         });
 
+        // 📧 Envoi de l'email d'invitation
+        try {
+            const { sendTransactionalEmail } = await import('@/lib/notifications/email');
+
+            if (isNewUser && generatedPassword) {
+                // Nouvel utilisateur → email avec identifiants
+                await sendTransactionalEmail({
+                    to: email,
+                    subject: `Bienvenue sur Polyx ERP — Vos identifiants de connexion`,
+                    template: 'USER_INVITATION',
+                    data: {
+                        prenom,
+                        nom,
+                        email,
+                        password: generatedPassword,
+                        organizationName: organization?.name || 'votre organisation',
+                        roleName: targetRole.name,
+                    },
+                });
+                console.log(`[Users] 📧 Email d'invitation envoyé à ${email} (nouveau compte)`);
+            } else {
+                // Utilisateur existant ajouté à une nouvelle org → notification
+                await sendTransactionalEmail({
+                    to: email,
+                    subject: `Polyx ERP — Vous avez été ajouté(e) à ${organization?.name || 'une nouvelle organisation'}`,
+                    template: 'USER_ADDED_TO_ORG',
+                    data: {
+                        prenom: user.prenom,
+                        nom: user.nom,
+                        organizationName: organization?.name || 'une nouvelle organisation',
+                        roleName: targetRole.name,
+                    },
+                });
+                console.log(`[Users] 📧 Email de notification envoyé à ${email} (ajouté à ${organization?.name})`);
+            }
+        } catch (emailError) {
+            console.error('[Users] ⚠️ Échec envoi email invitation:', emailError);
+            // On ne bloque pas la création si l'email échoue
+        }
+
         return NextResponse.json({
             success: true,
             user: {
@@ -200,9 +280,13 @@ export async function POST(request: NextRequest) {
                 email: user.email,
                 nom: user.nom,
                 prenom: user.prenom,
-                role: membership.role,
+                role: membership.role.code,
                 scope: membership.scope,
             },
+            emailSent: true,
+            message: isNewUser
+                ? `✅ Utilisateur créé. Un email d'invitation avec ses identifiants a été envoyé à ${email}.`
+                : `✅ Utilisateur ajouté à l'organisation. Un email de notification a été envoyé à ${email}.`,
         }, { status: 201 });
 
     } catch (error) {
@@ -212,4 +296,39 @@ export async function POST(request: NextRequest) {
             { status: 500 }
         );
     }
+}
+
+// ─── Helpers ──────────────────────────────────────────────────
+
+/**
+ * Génère un mot de passe sécurisé avec majuscules, minuscules, chiffres et symboles.
+ */
+function generateSecurePassword(length: number = 12): string {
+    const uppercase = 'ABCDEFGHJKLMNPQRSTUVWXYZ';
+    const lowercase = 'abcdefghjkmnpqrstuvwxyz';
+    const digits = '23456789';
+    const symbols = '!@#$&*';
+    const allChars = uppercase + lowercase + digits + symbols;
+
+    // Garantir au moins 1 de chaque catégorie
+    let password = '';
+    password += uppercase[Math.floor(Math.random() * uppercase.length)];
+    password += lowercase[Math.floor(Math.random() * lowercase.length)];
+    password += digits[Math.floor(Math.random() * digits.length)];
+    password += symbols[Math.floor(Math.random() * symbols.length)];
+
+    // Compléter avec des caractères aléatoires
+    for (let i = password.length; i < length; i++) {
+        const randomBytes = crypto.randomBytes(1);
+        password += allChars[randomBytes[0] % allChars.length];
+    }
+
+    // Mélanger le mot de passe (Fisher-Yates shuffle)
+    const arr = password.split('');
+    for (let i = arr.length - 1; i > 0; i--) {
+        const j = crypto.randomBytes(1)[0] % (i + 1);
+        [arr[i], arr[j]] = [arr[j], arr[i]];
+    }
+
+    return arr.join('');
 }

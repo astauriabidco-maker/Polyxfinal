@@ -221,7 +221,7 @@ export const authConfig: NextAuthConfig = {
 
                     const primaryMembership = activeMemberships[0];
 
-                    console.log(`[Auth] Success: ${email} (${primaryMembership.role}) @ ${primaryMembership.organization.name}`);
+                    console.log(`[Auth] Success: ${email} (${primaryMembership.role.code}) @ ${primaryMembership.organization.name}`);
                     console.log(`[Auth] ${activeMemberships.length} active membership(s)`);
 
                     // ── 6. Build response ─────────────────────────

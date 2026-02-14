@@ -10,6 +10,7 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { switchOrganization } from '@/app/actions/switchOrganization';
 import type { PortfolioItem } from '@/lib/dashboard/portfolio';
+import { SystemRoleCode } from '@/lib/constants/roles';
 
 interface PortfolioGridProps {
     items: PortfolioItem[];
@@ -46,8 +47,8 @@ export function PortfolioGrid({ items }: PortfolioGridProps) {
     return (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {items.map((item) => {
-                const roleInfo = ROLE_LABELS[item.role] || {
-                    label: item.role,
+                const roleInfo = ROLE_LABELS[item.role as SystemRoleCode] || {
+                    label: item.roleLabel || item.role,
                     color: 'bg-slate-500',
                 };
                 const hasBlockingAlerts = item.alertesBloquantes > 0;

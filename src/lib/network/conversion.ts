@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma';
-import { NetworkType, Role, MembershipScope, OrganizationType } from '@prisma/client';
+import { NetworkType, MembershipScope, OrganizationType } from '@prisma/client';
+import { ROLE_IDS } from '@/lib/constants/roles';
 
 /**
  * Convertit un candidat signé en une organisation (franchise) opérationnelle.
@@ -31,7 +32,7 @@ export async function convertCandidateToFranchise(candidateId: string) {
         });
 
         // 3. Créer le Site principal (Headquarters)
-        await tx.site.create({
+        const hqSite = await tx.site.create({
             data: {
                 organizationId: newOrg.id,
                 name: 'Siège principal',
@@ -59,13 +60,23 @@ export async function convertCandidateToFranchise(candidateId: string) {
         }
 
         // 5. Créer le Membership ADMIN sur la nouvelle org
+        // @ts-expect-error - Prisma type mismatch for role connect
         await tx.membership.create({
             data: {
-                userId: user.id,
-                organizationId: newOrg.id,
-                role: Role.ADMIN,
+                user: { connect: { id: user.id } },
+                organization: { connect: { id: newOrg.id } },
+                role: { connect: { id: ROLE_IDS.ADMIN } },
                 scope: MembershipScope.GLOBAL,
                 isActive: true,
+            },
+        });
+
+        // 5-bis. Lier l'admin au site siège (traçabilité du site principal)
+        await tx.membershipSiteAccess.create({
+            data: {
+                membershipUserId: user.id,
+                membershipOrgId: newOrg.id,
+                siteId: hqSite.id,
             },
         });
 

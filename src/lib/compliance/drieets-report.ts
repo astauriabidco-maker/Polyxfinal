@@ -203,11 +203,11 @@ export async function generateDRIEETSReport(
     }
 
     const formateurIds = org.members
-        .filter((m: any) => m.role === 'FORMAT')
+        .filter((m: any) => m.role.code === 'FORMAT')
         .map((m: any) => m.userId);
 
     const formateursDetails = org.members
-        .filter((m: any) => m.role === 'FORMAT')
+        .filter((m: any) => m.role.code === 'FORMAT')
         .map((m: any) => {
             const nbSessionsAnimees = sessions.filter(
                 (s: any) => s.formateurId === m.userId,

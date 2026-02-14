@@ -31,7 +31,7 @@ export default async function ProspectionPage() {
         },
     });
 
-    const isAdmin = membership?.role === 'ADMIN';
+    const isAdmin = membership?.role.code === 'ADMIN';
 
     // Récupérer les leads
     const leads = await prisma.lead.findMany({

@@ -50,6 +50,7 @@ model Organization {
   sessions              Session[]
   sites                 Site[]
   territories           Territory[]
+  roles                 Role[]
 
   @@index([siret])
   @@index([type])
@@ -132,7 +133,7 @@ model User {
 model Membership {
   userId         String
   organizationId String
-  role           Role                   @default(FORMAT)
+  roleId         String                 // Changed from role enum to roleId
   scope          MembershipScope        @default(GLOBAL)
   lastAccessedAt DateTime               @default(now())
   isActive       Boolean                @default(true)
@@ -140,6 +141,7 @@ model Membership {
   updatedAt      DateTime               @updatedAt
   organization   Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user           User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role           Role                   @relation(fields: [roleId], references: [id])
   siteAccess     MembershipSiteAccess[]
 
   @@id([userId, organizationId])
@@ -522,7 +524,7 @@ model Validation {
   entityId       String
   phase          Int
   validateurId   String
-  roleValidateur Role
+  roleValidateur String       // Snapshot of role code
   decision       String
   motif          String?
   createdAt      DateTime @default(now())
@@ -562,7 +564,7 @@ model AuditLog {
   id             String       @id @default(cuid())
   timestamp      DateTime     @default(now())
   userId         String
-  userRole       Role
+  userRole       String       // Snapshot of role name/code at time of action
   action         String
   niveauAction   NiveauAction
   entityType     String
@@ -938,12 +940,44 @@ model Territory {
 }
 
 /// Rôles système RBAC (5 rôles définis dans rbac_matrix.md)
-enum Role {
-  ADMIN
-  RESP_PEDAGO
-  RESP_ADMIN
-  REF_QUALITE
-  FORMAT
+/// Role (Système RBAC Dynamique)
+model Role {
+  id             String           @id @default(cuid())
+  name           String           // ex: "Responsable Pédagogique"
+  code           String           // ex: "RESP_PEDAGO"
+  description    String?
+  isSystem       Boolean          @default(false)
+  organizationId String?          // Null = Global System Role, Value = Custom Org Role
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+  
+  permissions    RolePermission[]
+  memberships    Membership[]
+
+  organization   Organization?    @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, name])
+  @@unique([organizationId, code])
+}
+
+model Permission {
+  id          String           @id @default(cuid())
+  code        String           @unique // ex: "org:read", "dossier:create"
+  description String
+  category    String?          // ex: "Dossiers", "Finance"
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  
+  roles       RolePermission[]
+}
+
+model RolePermission {
+  roleId       String
+  permissionId String
+  role         Role       @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@id([roleId, permissionId])
 }
 
 /// Statut de phase (Machine à état pour Compliance Gates)

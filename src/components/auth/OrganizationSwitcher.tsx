@@ -4,6 +4,7 @@ import { useState, useTransition } from 'react';
 import { useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { switchOrganization } from '@/app/actions/switchOrganization';
+import { SystemRoleCode } from '@/lib/constants/roles';
 
 // Couleurs par type d'organisation
 const ORG_TYPE_COLORS: Record<string, string> = {
@@ -140,7 +141,7 @@ export default function OrganizationSwitcher() {
                         {otherMemberships.map((membership) => {
                             const typeColor = ORG_TYPE_COLORS[membership.organizationType] || 'bg-slate-500';
                             const typeLabel = ORG_TYPE_LABELS[membership.organizationType] || membership.organizationType;
-                            const roleLabel = ROLE_LABELS[membership.role] || membership.role;
+                            const roleLabel = ROLE_LABELS[membership.role.code as SystemRoleCode] || { label: membership.role.name };
 
                             return (
                                 <button
@@ -168,7 +169,7 @@ export default function OrganizationSwitcher() {
                                             </span>
                                         </div>
                                         <div className="flex items-center gap-2 text-xs text-slate-400">
-                                            <span>{roleLabel}</span>
+                                            <span>{typeof roleLabel === 'string' ? roleLabel : roleLabel.label}</span>
                                             {(membership as any).siteName && (
                                                 <div className="flex items-center gap-1.5 text-xs text-slate-400 mt-0.5">
                                                     <span>📍 {(membership as any).siteName}</span>

@@ -24,7 +24,8 @@ export default async function RGPDRegisterPage() {
 
     // RBAC : ADMIN et RESP_ADMIN uniquement
     const allowedRoles = ['ADMIN', 'RESP_ADMIN'];
-    if (!allowedRoles.includes(session.user.role)) {
+    const roleCode = typeof session.user.role === 'string' ? session.user.role : (session.user.role as any)?.code || 'UNKNOWN';
+    if (!allowedRoles.includes(roleCode)) {
         redirect('/');
     }
 

@@ -16,6 +16,7 @@
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import type { Organization } from '@prisma/client';
+import { ROLE_IDS, ROLE_CODES } from '@/lib/constants/roles';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -92,7 +93,7 @@ export async function onboardFranchisee(input: OnboardInput): Promise<OnboardRes
             });
 
             // 2b. Créer le site siège du franchisé
-            await tx.site.create({
+            const hqSite = await tx.site.create({
                 data: {
                     organizationId: newOrg.id,
                     name: `Siège ${candidate.name}`,
@@ -116,13 +117,23 @@ export async function onboardFranchisee(input: OnboardInput): Promise<OnboardRes
             });
 
             // 2d. Créer le Membership ADMIN GLOBAL
+            // @ts-expect-error - Prisma type mismatch for role connect
             await tx.membership.create({
                 data: {
-                    userId: adminUser.id,
-                    organizationId: newOrg.id,
-                    role: 'ADMIN',
+                    user: { connect: { id: adminUser.id } },
+                    organization: { connect: { id: newOrg.id } },
+                    role: { connect: { id: ROLE_IDS.ADMIN } },
                     scope: 'GLOBAL',
                     isActive: true,
+                },
+            });
+
+            // 2d-bis. Lier l'admin au site siège (traçabilité du site principal)
+            await tx.membershipSiteAccess.create({
+                data: {
+                    membershipUserId: adminUser.id,
+                    membershipOrgId: newOrg.id,
+                    siteId: hqSite.id,
                 },
             });
 
@@ -152,7 +163,7 @@ export async function onboardFranchisee(input: OnboardInput): Promise<OnboardRes
                 data: {
                     organizationId: parentOrg.id,
                     userId: adminUser.id,
-                    userRole: 'ADMIN',
+                    userRole: ROLE_CODES.ADMIN,
                     action: 'ONBOARD_FRANCHISEE',
                     niveauAction: 'VALIDATION',
                     entityType: 'Organization',

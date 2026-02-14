@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { validateOrganizationCreation } from '@/lib/compliance';
+import { ROLE_IDS } from '@/lib/constants/roles';
 
 /**
  * POST /api/organizations
@@ -117,9 +118,9 @@ export async function POST(request: NextRequest) {
         if (session.user.id) {
             await prisma.membership.create({
                 data: {
-                    userId: session.user.id,
-                    organizationId: organization.id,
-                    role: 'ADMIN',
+                    user: { connect: { id: session.user.id } },
+                    organization: { connect: { id: organization.id } },
+                    role: { connect: { id: ROLE_IDS.ADMIN } },
                     scope: 'GLOBAL',
                 },
             });
