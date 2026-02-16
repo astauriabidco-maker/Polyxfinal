@@ -7,15 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { onboardFranchisee } from '@/lib/network/onboard';
-import { z } from 'zod';
-
-const onboardSchema = z.object({
-    adminPassword: z.string().min(8, 'Mot de passe min 8 caractères'),
-    siret: z.string().length(14, 'SIRET doit contenir 14 caractères'),
-    city: z.string().min(1, 'Ville requise'),
-    zipCode: z.string().min(4, 'Code postal requis'),
-    address: z.string().optional(),
-});
+import { onboardFranchiseeSchema } from '@/lib/validation';
 
 export async function POST(
     req: NextRequest,
@@ -32,7 +24,7 @@ export async function POST(
     }
 
     const body = await req.json();
-    const parsed = onboardSchema.safeParse(body);
+    const parsed = onboardFranchiseeSchema.safeParse(body);
 
     if (!parsed.success) {
         return NextResponse.json(

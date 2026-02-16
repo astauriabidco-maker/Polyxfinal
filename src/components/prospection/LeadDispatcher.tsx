@@ -21,8 +21,6 @@ export default function LeadDispatcher({ leads, sites }: LeadDispatcherProps) {
 
         setIsSubmitting(true);
         try {
-            // In a real app, we might want to do this in bulk
-            // For now, let's do it one by one or Promise.all
             await Promise.all(selectedLeads.map(leadId =>
                 dispatchLead({ leadId, siteId: targetSiteId })
             ));
@@ -44,21 +42,37 @@ export default function LeadDispatcher({ leads, sites }: LeadDispatcherProps) {
         );
     };
 
+    const selectAll = () => {
+        if (selectedLeads.length === leads.length) {
+            setSelectedLeads([]);
+        } else {
+            setSelectedLeads(leads.map(l => l.id));
+        }
+    };
+
     if (leads.length === 0) {
         return (
-            <div className="p-8 text-center bg-gray-50 rounded-lg border border-gray-200">
-                <p className="text-gray-500">Aucun nouveau lead à dispatcher.</p>
+            <div className="p-8 text-center">
+                <p className="text-4xl mb-3">📭</p>
+                <p className="text-slate-400">Aucun nouveau lead à dispatcher.</p>
             </div>
         );
     }
 
     return (
         <div className="space-y-4">
-            <div className="flex items-center justify-between bg-white p-4 rounded-lg shadow-sm border border-gray-200">
+            {/* Action Bar */}
+            <div className="flex items-center justify-between bg-slate-700/30 p-4 rounded-xl border border-slate-600/50">
                 <div className="flex items-center gap-4">
-                    <span className="font-medium text-gray-700">{selectedLeads.length} sélectionné(s)</span>
+                    <button
+                        onClick={selectAll}
+                        className="text-xs text-slate-400 hover:text-white transition-colors"
+                    >
+                        {selectedLeads.length === leads.length ? 'Tout désélectionner' : 'Tout sélectionner'}
+                    </button>
+                    <span className="font-medium text-slate-300">{selectedLeads.length} sélectionné(s)</span>
                     <select
-                        className="form-select rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500"
+                        className="bg-slate-700/50 border border-slate-600 rounded-lg px-3 py-2 text-white text-sm focus:outline-none focus:ring-2 focus:ring-cyan-500"
                         value={targetSiteId}
                         onChange={(e) => setTargetSiteId(e.target.value)}
                     >
@@ -71,50 +85,45 @@ export default function LeadDispatcher({ leads, sites }: LeadDispatcherProps) {
                 <button
                     onClick={handleDispatch}
                     disabled={!targetSiteId || selectedLeads.length === 0 || isSubmitting}
-                    className="px-4 py-2 bg-indigo-600 text-white rounded-md hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                    className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-lg hover:from-cyan-600 hover:to-blue-600 disabled:opacity-50 disabled:cursor-not-allowed transition-all shadow-lg shadow-cyan-500/20"
                 >
-                    {isSubmitting ? 'Dispatch...' : 'Dispatcher'}
+                    {isSubmitting ? 'Dispatch...' : '🚀 Dispatcher'}
                 </button>
             </div>
 
-            <div className="bg-white shadow overflow-hidden sm:rounded-md">
-                <ul className="divide-y divide-gray-200">
-                    {leads.map((lead) => (
-                        <li key={lead.id}>
-                            <div className="flex items-center px-4 py-4 sm:px-6">
-                                <div className="min-w-0 flex-1 flex items-center">
-                                    <input
-                                        type="checkbox"
-                                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded mr-4"
-                                        checked={selectedLeads.includes(lead.id)}
-                                        onChange={() => toggleLead(lead.id)}
-                                    />
-                                    <div className="min-w-0 flex-1 px-4 md:grid md:grid-cols-2 md:gap-4">
-                                        <div>
-                                            <p className="text-sm font-medium text-indigo-600 truncate">{lead.nom} {lead.prenom}</p>
-                                            <p className="mt-2 flex items-center text-sm text-gray-500">
-                                                <span className="truncate">{lead.email}</span>
-                                            </p>
-                                        </div>
-                                        <div className="hidden md:block">
-                                            <div className="text-sm text-gray-900">
-                                                Origine: {lead.origin || lead.source || 'N/A'}
-                                            </div>
-                                            <div className="mt-2 text-sm text-gray-500">
-                                                {lead.campaign?.name ? `Campagne: ${lead.campaign.name}` : 'Organique'}
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                                <div>
-                                    <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-                                        {lead.ville || 'Ville inconnue'} ({lead.codePostal})
-                                    </span>
-                                </div>
+            {/* Leads List */}
+            <div className="divide-y divide-slate-700/50">
+                {leads.map((lead) => (
+                    <div
+                        key={lead.id}
+                        onClick={() => toggleLead(lead.id)}
+                        className={`flex items-center px-4 py-4 cursor-pointer transition-colors rounded-lg ${selectedLeads.includes(lead.id) ? 'bg-cyan-500/10 border border-cyan-500/30' : 'hover:bg-slate-700/30 border border-transparent'}`}
+                    >
+                        <input
+                            type="checkbox"
+                            className="h-4 w-4 text-cyan-500 focus:ring-cyan-500 border-slate-600 rounded bg-slate-700 mr-4"
+                            checked={selectedLeads.includes(lead.id)}
+                            onChange={() => toggleLead(lead.id)}
+                        />
+                        <div className="min-w-0 flex-1 grid grid-cols-1 md:grid-cols-3 gap-4">
+                            <div>
+                                <p className="text-sm font-medium text-white truncate">{lead.nom} {lead.prenom}</p>
+                                <p className="mt-1 text-sm text-slate-400 truncate">{lead.email}</p>
                             </div>
-                        </li>
-                    ))}
-                </ul>
+                            <div>
+                                <p className="text-sm text-slate-300">{lead.origin || lead.source || 'N/A'}</p>
+                                <p className="mt-1 text-sm text-slate-500">
+                                    {lead.campaign?.name ? `Campagne: ${lead.campaign.name}` : 'Organique'}
+                                </p>
+                            </div>
+                            <div className="flex items-center justify-end">
+                                <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                                    {lead.ville || 'Ville inconnue'} ({lead.codePostal})
+                                </span>
+                            </div>
+                        </div>
+                    </div>
+                ))}
             </div>
         </div>
     );

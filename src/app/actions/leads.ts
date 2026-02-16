@@ -107,18 +107,34 @@ export async function registerInteraction(data: z.infer<typeof RegisterInteracti
     }
 
     try {
-        // 1. Mise à jour du Lead
+        // 1. Récupérer le lead actuel pour concaténer les notes
+        const currentLead = await prisma.lead.findUnique({
+            where: { id: leadId },
+            select: { notes: true },
+        });
+
+        // Construire les notes concaténées (timestamp + type + nouvelles notes)
+        const typeLabels: Record<string, string> = {
+            'CALL_NO_ANSWER': '📞 Pas de réponse',
+            'CALL_INTERESTED': '🤔 Intéressé',
+            'CALL_NOT_INTERESTED': '❌ Pas intéressé',
+            'BOOK_RDV': '📅 RDV réservé',
+        };
+        const timestamp = new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+        const newEntry = `[${timestamp}] ${typeLabels[type] || type}${details.notes ? ' — ' + details.notes : ''}`;
+        const concatenatedNotes = currentLead?.notes
+            ? newEntry + '\n' + currentLead.notes
+            : newEntry;
+
+        // 2. Mise à jour du Lead
         await prisma.lead.update({
             where: { id: leadId },
             data: {
                 status: newStatus,
-                notes: details.notes, // Append or overwrite? Simple overwrite for now
+                notes: concatenatedNotes,
                 ...updateData
             }
         });
-
-        // 2. (Optionnel) Créer un AuditLog ou InteractionLog spécifique si besoin
-        // Pour l'instant on reste simple avec le champ `notes` du Lead
 
         revalidatePath('/prospection');
         return { success: true };

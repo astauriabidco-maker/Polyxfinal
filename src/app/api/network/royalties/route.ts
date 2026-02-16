@@ -14,6 +14,11 @@ export async function GET(req: NextRequest) {
         return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
     }
 
+    // Seuls les ADMIN peuvent consulter les redevances
+    if (session.user.role?.code !== 'ADMIN') {
+        return NextResponse.json({ error: 'Accès réservé aux administrateurs' }, { status: 403 });
+    }
+
     const organizationId = req.nextUrl.searchParams.get('organizationId');
     const month = req.nextUrl.searchParams.get('month');
     const summary = req.nextUrl.searchParams.get('summary');

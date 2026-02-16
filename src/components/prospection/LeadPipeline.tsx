@@ -24,7 +24,7 @@ interface Lead {
     ville: string | null;
     campaign: { id: string; name: string; source: string } | null;
     partner: { id: string; companyName: string } | null;
-    consent: { consentGiven: boolean; anonymizedAt: string | null } | null;
+    consent: { consentGiven: boolean; legalBasis: string | null; anonymizedAt: string | null } | null;
     createdAt: string;
 }
 
@@ -79,6 +79,7 @@ export default function LeadPipeline({ leads, stats, isAdmin }: Props) {
         email: '', nom: '', prenom: '', telephone: '',
         formationSouhaitee: '', message: '', codePostal: '', ville: '',
     });
+    const [consentGiven, setConsentGiven] = useState(false);
 
     const filteredLeads = filter
         ? leads.filter(l => l.status === filter)
@@ -92,7 +93,7 @@ export default function LeadPipeline({ leads, stats, isAdmin }: Props) {
             const res = await fetch('/api/leads', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ ...formData, source: 'MANUAL' }),
+                body: JSON.stringify({ ...formData, source: 'MANUAL', consentGiven }),
             });
             if (!res.ok) {
                 const d = await res.json();
@@ -100,6 +101,7 @@ export default function LeadPipeline({ leads, stats, isAdmin }: Props) {
             }
             setShowModal(false);
             setFormData({ email: '', nom: '', prenom: '', telephone: '', formationSouhaitee: '', message: '', codePostal: '', ville: '' });
+            setConsentGiven(false);
             router.refresh();
         } catch (err: any) {
             setError(err.message);
@@ -212,6 +214,7 @@ export default function LeadPipeline({ leads, stats, isAdmin }: Props) {
                             <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Formation</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Statut</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Score</th>
+                            <th className="px-4 py-3 text-center text-xs font-medium text-slate-400 uppercase">RGPD</th>
                             <th className="px-4 py-3 text-left text-xs font-medium text-slate-400 uppercase">Date</th>
                             {isAdmin && (
                                 <th className="px-4 py-3 text-right text-xs font-medium text-slate-400 uppercase">Actions</th>
@@ -287,6 +290,15 @@ export default function LeadPipeline({ leads, stats, isAdmin }: Props) {
                                             </div>
                                         ) : (
                                             <span className="text-xs text-slate-500">—</span>
+                                        )}
+                                    </td>
+                                    <td className="px-4 py-3 text-center">
+                                        {isAnonymized ? (
+                                            <span title="Données anonymisées (RGPD Art.17)" className="cursor-help">🔒</span>
+                                        ) : lead.consent?.consentGiven ? (
+                                            <span title={`Consentement OK — ${lead.consent.legalBasis || 'Non spécifié'}`} className="cursor-help">✅</span>
+                                        ) : (
+                                            <span title="Consentement manquant" className="cursor-help text-amber-400">⚠️</span>
                                         )}
                                     </td>
                                     <td className="px-4 py-3">
@@ -375,6 +387,20 @@ export default function LeadPipeline({ leads, stats, isAdmin }: Props) {
                                 <label className="block text-sm font-medium text-slate-400 mb-1">Message</label>
                                 <textarea value={formData.message} onChange={(e) => setFormData({ ...formData, message: e.target.value })} rows={3}
                                     className="w-full px-3 py-2 bg-slate-700/50 border border-slate-600 rounded-lg text-white focus:outline-none focus:ring-2 focus:ring-cyan-500" />
+                            </div>
+                            <div className="flex items-start gap-3 p-3 bg-slate-700/30 rounded-lg border border-slate-600/50">
+                                <input
+                                    type="checkbox"
+                                    id="consent"
+                                    checked={consentGiven}
+                                    onChange={(e) => setConsentGiven(e.target.checked)}
+                                    className="mt-1 h-4 w-4 text-cyan-500 focus:ring-cyan-500 border-slate-600 rounded bg-slate-700"
+                                    required
+                                />
+                                <label htmlFor="consent" className="text-sm text-slate-300">
+                                    <span className="font-medium text-white">Consentement RGPD *</span><br />
+                                    Je confirme avoir recueilli le consentement explicite de cette personne pour le traitement de ses données personnelles.
+                                </label>
                             </div>
                             <div className="flex justify-end gap-3 pt-2">
                                 <button type="button" onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-400 hover:text-white transition-colors">Annuler</button>

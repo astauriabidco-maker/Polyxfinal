@@ -8,16 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
-import { z } from 'zod';
-
-// ─── Validation ───────────────────────────────────────────────
-
-const createTerritorySchema = z.object({
-    organizationId: z.string().min(1),
-    name: z.string().min(2, 'Nom requis'),
-    zipCodes: z.array(z.string().min(4)).min(1, 'Au moins un code postal requis'),
-    isExclusive: z.boolean().default(true),
-});
+import { createTerritorySchema } from '@/lib/validation';
 
 // ─── GET ──────────────────────────────────────────────────────
 
@@ -48,6 +39,11 @@ export async function POST(req: NextRequest) {
     const session = await auth();
     if (!session?.user) {
         return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
+    }
+
+    // Seuls les ADMIN peuvent créer des territoires
+    if (session.user.role?.code !== 'ADMIN') {
+        return NextResponse.json({ error: 'Accès réservé aux administrateurs' }, { status: 403 });
     }
 
     const body = await req.json();

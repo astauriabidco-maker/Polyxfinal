@@ -16,7 +16,7 @@
 import { prisma } from '@/lib/prisma';
 import bcrypt from 'bcryptjs';
 import type { Organization } from '@prisma/client';
-import { ROLE_IDS, ROLE_CODES } from '@/lib/constants/roles';
+import { getSystemRoleId, ROLE_CODES } from '@/lib/constants/roles';
 
 // ─── Types ────────────────────────────────────────────────────
 
@@ -112,17 +112,18 @@ export async function onboardFranchisee(input: OnboardInput): Promise<OnboardRes
                     nom: candidate.name || candidate.representantNom,
                     prenom: candidate.representantPrenom || 'Admin',
                     passwordHash: hashedPassword,
+                    mustChangePassword: true,
                     isActive: true,
                 },
             });
 
             // 2d. Créer le Membership ADMIN GLOBAL
-            // @ts-expect-error - Prisma type mismatch for role connect
+            const adminRoleId = await getSystemRoleId('ADMIN');
             await tx.membership.create({
                 data: {
                     user: { connect: { id: adminUser.id } },
                     organization: { connect: { id: newOrg.id } },
-                    role: { connect: { id: ROLE_IDS.ADMIN } },
+                    role: { connect: { id: adminRoleId } },
                     scope: 'GLOBAL',
                     isActive: true,
                 },

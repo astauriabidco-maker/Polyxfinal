@@ -1,148 +1,184 @@
 'use client';
 
 import { useState } from 'react';
-import { Lead, LeadStatus, Campaign } from '@prisma/client';
+import { Lead, LeadStatus, Campaign, Site } from '@prisma/client';
 import LeadInteractionPanel from './LeadInteractionPanel';
 import { formatDistanceToNow } from 'date-fns';
 import { fr } from 'date-fns/locale';
 
 interface LeadWithRelations extends Lead {
-    campaign?: Campaign | null;
+    campaign?: Pick<Campaign, 'name' | 'id' | 'source'> | null;
     site?: { name: string } | null;
 }
 
 interface LeadListProps {
     initialLeads: LeadWithRelations[];
+    sites?: Site[];
 }
 
-export default function LeadList({ initialLeads }: LeadListProps) {
+const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
+    'DISPATCHED': { label: 'A traiter', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: '✨' },
+    'ATTEMPTED': { label: 'Rappeler', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: '📞' },
+    'RDV_SCHEDULED': { label: 'RDV Planifié', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: '📅' },
+    'NURTURING': { label: 'A mûrir', color: 'bg-teal-500/20 text-teal-400 border-teal-500/30', icon: '🌱' },
+    'QUALIFIED': { label: 'Qualifié', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', icon: '⭐' },
+    'NOT_ELIGIBLE': { label: 'Non éligible', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: '❌' },
+};
+
+export default function LeadList({ initialLeads, sites = [] }: LeadListProps) {
     const [selectedLead, setSelectedLead] = useState<LeadWithRelations | null>(null);
     const [filterStatus, setFilterStatus] = useState<LeadStatus | 'ALL'>('DISPATCHED');
+    const [filterSiteId, setFilterSiteId] = useState<string>('ALL');
 
-    const filteredLeads = initialLeads.filter(lead =>
-        filterStatus === 'ALL' ? true : lead.status === filterStatus
-    );
+    const filteredLeads = initialLeads.filter(lead => {
+        const statusMatch = filterStatus === 'ALL' ? true : lead.status === filterStatus;
+        const siteMatch = filterSiteId === 'ALL' ? true : lead.siteId === filterSiteId;
+        return statusMatch && siteMatch;
+    });
 
     return (
         <div className="flex h-[calc(100vh-100px)]">
             {/* Left Sidebar: List */}
-            <div className="w-1/3 border-r border-gray-200 bg-white flex flex-col">
-                <div className="p-4 border-b border-gray-200">
-                    <h2 className="text-lg font-medium text-gray-900">Mes Leads</h2>
-                    <div className="mt-2">
+            <div className="w-1/3 border-r border-slate-700/50 flex flex-col">
+                <div className="p-4 border-b border-slate-700/50 space-y-2">
+                    <h2 className="text-lg font-medium text-white">Mes Leads</h2>
+                    <select
+                        className="block w-full rounded-lg bg-slate-700/50 border border-slate-600 text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                        value={filterStatus}
+                        onChange={(e) => setFilterStatus(e.target.value as LeadStatus | 'ALL')}
+                    >
+                        <option value="ALL">Tous les statuts</option>
+                        <option value="DISPATCHED">✨ Nouveaux (A traiter)</option>
+                        <option value="ATTEMPTED">📞 Tentative (Rappeler)</option>
+                        <option value="RDV_SCHEDULED">📅 RDV Planifié</option>
+                        <option value="QUALIFIED">⭐ Qualifié</option>
+                        <option value="NURTURING">🌱 A mûrir</option>
+                        <option value="NOT_ELIGIBLE">❌ Non éligible</option>
+                    </select>
+                    {sites.length > 0 && (
                         <select
-                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-sm"
-                            value={filterStatus}
-                            onChange={(e) => setFilterStatus(e.target.value as LeadStatus | 'ALL')}
+                            className="block w-full rounded-lg bg-slate-700/50 border border-slate-600 text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500"
+                            value={filterSiteId}
+                            onChange={(e) => setFilterSiteId(e.target.value)}
                         >
-                            <option value="ALL">Tous les statuts</option>
-                            <option value="DISPATCHED">✨ Nouveaux (A traiter)</option>
-                            <option value="ATTEMPTED">📞 Tentative (Rappeler)</option>
-                            <option value="RDV_SCHEDULED">📅 RDV Planifié</option>
-                            <option value="NURTURING">🌱 A mûrir</option>
-                            <option value="NOT_ELIGIBLE">❌ Non éligible</option>
+                            <option value="ALL">Tous les sites</option>
+                            {sites.map(site => (
+                                <option key={site.id} value={site.id}>{site.name}</option>
+                            ))}
                         </select>
-                    </div>
+                    )}
+                    <p className="text-xs text-slate-500">{filteredLeads.length} lead{filteredLeads.length > 1 ? 's' : ''}</p>
                 </div>
 
                 <div className="flex-1 overflow-y-auto">
-                    <ul className="divide-y divide-gray-200">
-                        {filteredLeads.map((lead) => (
-                            <li
-                                key={lead.id}
-                                onClick={() => setSelectedLead(lead)}
-                                className={`cursor-pointer hover:bg-gray-50 transition-colors ${selectedLead?.id === lead.id ? 'bg-indigo-50 border-l-4 border-indigo-600' : ''}`}
-                            >
-                                <div className="px-4 py-4 sm:px-6">
-                                    <div className="flex justify-between">
-                                        <p className="text-sm font-medium text-indigo-600 truncate">
-                                            {lead.nom} {lead.prenom}
-                                        </p>
-                                        <div className="ml-2 flex-shrink-0 flex">
-                                            <p className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full 
-                        ${lead.status === 'DISPATCHED' ? 'bg-green-100 text-green-800' :
-                                                    lead.status === 'ATTEMPTED' ? 'bg-yellow-100 text-yellow-800' :
-                                                        lead.status === 'RDV_SCHEDULED' ? 'bg-blue-100 text-blue-800' :
-                                                            'bg-gray-100 text-gray-800'}`}>
-                                                {lead.status}
+                    <ul className="divide-y divide-slate-700/50">
+                        {filteredLeads.map((lead) => {
+                            const cfg = STATUS_CONFIG[lead.status] || { label: lead.status, color: 'bg-slate-500/20 text-slate-400 border-slate-500/30', icon: '📊' };
+                            return (
+                                <li
+                                    key={lead.id}
+                                    onClick={() => setSelectedLead(lead)}
+                                    className={`cursor-pointer transition-colors ${selectedLead?.id === lead.id ? 'bg-cyan-500/10 border-l-4 border-cyan-500' : 'hover:bg-slate-800/50'}`}
+                                >
+                                    <div className="px-4 py-4">
+                                        <div className="flex justify-between items-start">
+                                            <p className="text-sm font-medium text-white truncate">
+                                                {lead.nom} {lead.prenom}
                                             </p>
+                                            <span className={`px-2 py-0.5 rounded-full text-xs font-medium border ${cfg.color}`}>
+                                                {cfg.icon} {cfg.label}
+                                            </span>
                                         </div>
-                                    </div>
-                                    <div className="mt-2 text-sm text-gray-500">
-                                        <p className="truncate">{lead.email}</p>
-                                        <p className="truncate text-xs mt-1">
-                                            {lead.telephone || 'Aucun téléphone'}
+                                        <p className="mt-1 text-sm text-slate-400 truncate">{lead.email}</p>
+                                        <div className="mt-2 flex items-center justify-between">
+                                            <p className="text-xs text-slate-500">
+                                                {lead.telephone || 'Aucun téléphone'}
+                                            </p>
+                                            {lead.site && (
+                                                <span className="text-xs text-slate-500">📍 {lead.site.name}</span>
+                                            )}
+                                        </div>
+                                        <p className="mt-1 text-xs text-slate-600">
+                                            Il y a {formatDistanceToNow(new Date(lead.createdAt), { locale: fr })}
                                         </p>
                                     </div>
-                                    <div className="mt-2 text-xs text-gray-400">
-                                        Il y a {formatDistanceToNow(new Date(lead.createdAt), { locale: fr })}
-                                    </div>
-                                </div>
-                            </li>
-                        ))}
+                                </li>
+                            );
+                        })}
                         {filteredLeads.length === 0 && (
-                            <li className="p-4 text-center text-sm text-gray-500">Aucun lead trouvé.</li>
+                            <li className="p-8 text-center">
+                                <p className="text-3xl mb-2">📭</p>
+                                <p className="text-sm text-slate-500">Aucun lead trouvé.</p>
+                            </li>
                         )}
                     </ul>
                 </div>
             </div>
 
             {/* Right Content: Detail & Action */}
-            <div className="flex-1 bg-gray-50 p-6 overflow-y-auto">
+            <div className="flex-1 p-6 overflow-y-auto">
                 {selectedLead ? (
                     <div>
-                        <div className="bg-white shadow sm:rounded-lg mb-6 overflow-hidden">
-                            <div className="px-4 py-5 sm:px-6 bg-gray-50 border-b border-gray-200">
-                                <h3 className="text-lg leading-6 font-medium text-gray-900">
+                        {/* Detail Card */}
+                        <div className="bg-slate-800/50 backdrop-blur rounded-xl border border-slate-700/50 mb-6 overflow-hidden">
+                            <div className="px-6 py-4 border-b border-slate-700/50">
+                                <h3 className="text-lg font-medium text-white">
                                     Détails du Lead
                                 </h3>
                             </div>
-                            <div className="border-t border-gray-200 px-4 py-5 sm:p-0">
-                                <dl className="sm:divide-y sm:divide-gray-200">
-                                    <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                                        <dt className="text-sm font-medium text-gray-500">Nom complet</dt>
-                                        <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{selectedLead.prenom} {selectedLead.nom}</dd>
+                            <div className="px-6 py-4">
+                                <dl className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <dt className="text-xs font-medium text-slate-500 uppercase">Nom complet</dt>
+                                        <dd className="mt-1 text-sm text-white">{selectedLead.prenom} {selectedLead.nom}</dd>
                                     </div>
-                                    <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                                        <dt className="text-sm font-medium text-gray-500">Email</dt>
-                                        <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{selectedLead.email}</dd>
+                                    <div>
+                                        <dt className="text-xs font-medium text-slate-500 uppercase">Email</dt>
+                                        <dd className="mt-1 text-sm text-white">{selectedLead.email}</dd>
                                     </div>
-                                    <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                                        <dt className="text-sm font-medium text-gray-500">Téléphone</dt>
-                                        <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{selectedLead.telephone || '-'}</dd>
+                                    <div>
+                                        <dt className="text-xs font-medium text-slate-500 uppercase">Téléphone</dt>
+                                        <dd className="mt-1 text-sm text-white">{selectedLead.telephone || '—'}</dd>
                                     </div>
-                                    <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                                        <dt className="text-sm font-medium text-gray-500">Ville / CP</dt>
-                                        <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{selectedLead.ville} ({selectedLead.codePostal})</dd>
+                                    <div>
+                                        <dt className="text-xs font-medium text-slate-500 uppercase">Ville / CP</dt>
+                                        <dd className="mt-1 text-sm text-white">{selectedLead.ville || '—'} {selectedLead.codePostal ? `(${selectedLead.codePostal})` : ''}</dd>
                                     </div>
-                                    <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                                        <dt className="text-sm font-medium text-gray-500">Formation souhaitée</dt>
-                                        <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{selectedLead.formationSouhaitee || '-'}</dd>
+                                    <div>
+                                        <dt className="text-xs font-medium text-slate-500 uppercase">Formation souhaitée</dt>
+                                        <dd className="mt-1 text-sm text-white">{selectedLead.formationSouhaitee || '—'}</dd>
                                     </div>
-                                    <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                                        <dt className="text-sm font-medium text-gray-500">Message</dt>
-                                        <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">{selectedLead.message || '-'}</dd>
-                                    </div>
-                                    <div className="py-4 sm:py-5 sm:grid sm:grid-cols-3 sm:gap-4 sm:px-6">
-                                        <dt className="text-sm font-medium text-gray-500">Source / Origine</dt>
-                                        <dd className="mt-1 text-sm text-gray-900 sm:mt-0 sm:col-span-2">
+                                    <div>
+                                        <dt className="text-xs font-medium text-slate-500 uppercase">Source</dt>
+                                        <dd className="mt-1 text-sm text-white">
                                             {selectedLead.source} {selectedLead.origin ? `(${selectedLead.origin})` : ''}
-                                            {selectedLead.campaign ? ` - Campagne: ${selectedLead.campaign.name}` : ''}
+                                            {selectedLead.campaign ? ` — ${selectedLead.campaign.name}` : ''}
                                         </dd>
                                     </div>
+                                    {selectedLead.message && (
+                                        <div className="col-span-2">
+                                            <dt className="text-xs font-medium text-slate-500 uppercase">Message</dt>
+                                            <dd className="mt-1 text-sm text-slate-300">{selectedLead.message}</dd>
+                                        </div>
+                                    )}
+                                    {selectedLead.notes && (
+                                        <div className="col-span-2">
+                                            <dt className="text-xs font-medium text-slate-500 uppercase">Historique Notes</dt>
+                                            <dd className="mt-1 text-sm text-slate-300 whitespace-pre-line bg-slate-700/30 rounded-lg p-3 border border-slate-600/50 max-h-40 overflow-y-auto">{selectedLead.notes}</dd>
+                                        </div>
+                                    )}
                                 </dl>
                             </div>
                         </div>
 
-                        <LeadInteractionPanel lead={selectedLead} onInteractionComplete={() => {
-                            // Refresh or update local state could happen here,
-                            // but server component refresh handles it via router.refresh in the child
-                            // We might want to clear selection or just let it reload
-                        }} />
+                        <LeadInteractionPanel lead={selectedLead} onInteractionComplete={() => { }} />
                     </div>
                 ) : (
-                    <div className="h-full flex items-center justify-center text-gray-500">
-                        Sélectionnez un lead pour commencer la qualification
+                    <div className="h-full flex items-center justify-center">
+                        <div className="text-center">
+                            <p className="text-4xl mb-3">👈</p>
+                            <p className="text-slate-500">Sélectionnez un lead pour commencer la qualification</p>
+                        </div>
                     </div>
                 )}
             </div>

@@ -93,7 +93,7 @@ export async function POST(request: NextRequest) {
 
         const organizationId = session.user.organizationId;
         const body = await request.json();
-        const { email, nom, prenom, telephone, formationSouhaitee, message, codePostal, ville, source, campaignId, score } = body;
+        const { email, nom, prenom, telephone, formationSouhaitee, message, codePostal, ville, source, campaignId, score, consentGiven } = body;
 
         if (!email || !nom || !prenom) {
             return NextResponse.json({ error: 'Email, nom et prénom requis' }, { status: 400 });
@@ -116,14 +116,16 @@ export async function POST(request: NextRequest) {
             },
         });
 
-        // Créer le consentement si saisie manuelle
+        // Créer le consentement — reflet fidèle de ce qui a été recueilli
         await prisma.leadConsent.create({
             data: {
                 leadId: lead.id,
-                consentGiven: true,
-                consentText: 'Consentement recueilli lors de la saisie manuelle du lead.',
+                consentGiven: consentGiven === true,
+                consentText: consentGiven
+                    ? 'Consentement explicite recueilli lors de la saisie manuelle.'
+                    : 'Saisie manuelle sans consentement explicite recueilli.',
                 consentMethod: 'manual_entry',
-                legalBasis: 'legitimate_interest',
+                legalBasis: consentGiven ? 'consent' : 'legitimate_interest',
             },
         });
 

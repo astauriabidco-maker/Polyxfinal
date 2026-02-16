@@ -12,13 +12,18 @@ import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import Sidebar from '@/components/layout/Sidebar';
+import { switchOrganization } from '@/app/actions/switchOrganization';
 
 // Types
 interface Organization {
     id: string;
     name: string;
     type: string;
+    siret?: string;
     responsableName?: string;
+    ndaNumber?: string;
+    qualiopiCertified?: boolean;
+    qualiopiExpiry?: string;
     logoUrl?: string;
     signatureUrl?: string;
     cachetUrl?: string;
@@ -27,7 +32,7 @@ interface Organization {
     reglementInterieurUrl?: string;
 }
 
-type TabId = 'identity' | 'documents';
+type TabId = 'general' | 'identity' | 'documents';
 
 // Composant d'upload de fichier
 function FileUploadField({
@@ -160,12 +165,22 @@ export default function OrganizationSettingsPage() {
     const router = useRouter();
     const orgId = params.id as string;
 
-    const [activeTab, setActiveTab] = useState<TabId>('identity');
+    const [activeTab, setActiveTab] = useState<TabId>('general');
     const [organization, setOrganization] = useState<Organization | null>(null);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
     const [uploading, setUploading] = useState<string | null>(null);
     const [saveSuccess, setSaveSuccess] = useState(false);
+    const [saving, setSaving] = useState(false);
+
+    // État du formulaire général
+    const [formData, setFormData] = useState({
+        name: '',
+        responsableName: '',
+        ndaNumber: '',
+        qualiopiCertified: false,
+        qualiopiExpiry: '',
+    });
 
     // Charger l'organisation
     useEffect(() => {
@@ -175,6 +190,13 @@ export default function OrganizationSettingsPage() {
                 if (!res.ok) throw new Error('Organisation non trouvée');
                 const data = await res.json();
                 setOrganization(data.organization);
+                setFormData({
+                    name: data.organization.name || '',
+                    responsableName: data.organization.responsableName || '',
+                    ndaNumber: data.organization.ndaNumber || '',
+                    qualiopiCertified: data.organization.qualiopiCertified || false,
+                    qualiopiExpiry: data.organization.qualiopiExpiry?.split('T')[0] || '',
+                });
             } catch (err) {
                 setError(err instanceof Error ? err.message : 'Erreur de chargement');
             } finally {
@@ -218,7 +240,50 @@ export default function OrganizationSettingsPage() {
         }
     };
 
+    // Handler save infos générales
+    const handleSaveGeneral = async () => {
+        setSaving(true);
+        setError(null);
+        setSaveSuccess(false);
+
+        try {
+            const patchData: Record<string, unknown> = {
+                name: formData.name,
+                responsableName: formData.responsableName || null,
+                ndaNumber: formData.ndaNumber || null,
+                qualiopiCertified: formData.qualiopiCertified,
+            };
+
+            if (formData.qualiopiExpiry) {
+                patchData.qualiopiExpiry = new Date(formData.qualiopiExpiry).toISOString();
+            } else {
+                patchData.qualiopiExpiry = null;
+            }
+
+            const res = await fetch(`/api/organizations/${orgId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(patchData),
+            });
+
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || 'Erreur lors de la mise à jour');
+            }
+
+            const data = await res.json();
+            setOrganization(prev => prev ? { ...prev, ...data.organization } : null);
+            setSaveSuccess(true);
+            setTimeout(() => setSaveSuccess(false), 3000);
+        } catch (err) {
+            setError(err instanceof Error ? err.message : 'Erreur de mise à jour');
+        } finally {
+            setSaving(false);
+        }
+    };
+
     const tabs = [
+        { id: 'general' as TabId, label: 'Informations Générales', icon: '⚙️' },
         { id: 'identity' as TabId, label: 'Identité Visuelle', icon: '🎨' },
         { id: 'documents' as TabId, label: 'Documents Obligatoires', icon: '📄' },
     ];
@@ -352,29 +417,47 @@ export default function OrganizationSettingsPage() {
                             </svg>
                         </Link>
 
-                        <div className="flex items-center gap-3 p-3 bg-slate-800/30 border border-slate-700/50 rounded-xl opacity-50 cursor-not-allowed">
-                            <div className="w-10 h-10 rounded-lg bg-slate-700/50 text-slate-500 flex items-center justify-center">
+                        <button
+                            onClick={async () => {
+                                await switchOrganization(orgId);
+                                router.push('/users');
+                            }}
+                            className="flex items-center gap-3 p-3 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-green-500/50 hover:bg-slate-800 transition-all group text-left"
+                        >
+                            <div className="w-10 h-10 rounded-lg bg-green-500/20 text-green-400 flex items-center justify-center group-hover:bg-green-500/30 transition-colors">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z" />
                                 </svg>
                             </div>
                             <div>
-                                <p className="text-sm font-medium text-gray-400">Utilisateurs</p>
-                                <p className="text-xs text-gray-600">Bientôt</p>
+                                <p className="text-sm font-medium text-white group-hover:text-green-400 transition-colors">Utilisateurs</p>
+                                <p className="text-xs text-gray-500">Gérer les accès</p>
                             </div>
-                        </div>
+                            <svg className="w-4 h-4 text-gray-500 ml-auto group-hover:text-green-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                        </button>
 
-                        <div className="flex items-center gap-3 p-3 bg-slate-800/30 border border-slate-700/50 rounded-xl opacity-50 cursor-not-allowed">
-                            <div className="w-10 h-10 rounded-lg bg-slate-700/50 text-slate-500 flex items-center justify-center">
+                        <button
+                            onClick={async () => {
+                                await switchOrganization(orgId);
+                                router.push('/dashboard/qualiopi');
+                            }}
+                            className="flex items-center gap-3 p-3 bg-slate-800/50 border border-slate-700 rounded-xl hover:border-amber-500/50 hover:bg-slate-800 transition-all group text-left"
+                        >
+                            <div className="w-10 h-10 rounded-lg bg-amber-500/20 text-amber-400 flex items-center justify-center group-hover:bg-amber-500/30 transition-colors">
                                 <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-6 9l2 2 4-4" />
                                 </svg>
                             </div>
                             <div>
-                                <p className="text-sm font-medium text-gray-400">Qualiopi</p>
-                                <p className="text-xs text-gray-600">Bientôt</p>
+                                <p className="text-sm font-medium text-white group-hover:text-amber-400 transition-colors">Qualiopi</p>
+                                <p className="text-xs text-gray-500">Suivi & conformité</p>
                             </div>
-                        </div>
+                            <svg className="w-4 h-4 text-gray-500 ml-auto group-hover:text-amber-400 transition-colors" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+                            </svg>
+                        </button>
                     </div>
 
                     {/* Tabs */}
@@ -398,6 +481,129 @@ export default function OrganizationSettingsPage() {
                     </div>
 
                     {/* Tab Content */}
+
+                    {/* ═══ INFORMATIONS GÉNÉRALES ═══ */}
+                    {activeTab === 'general' && (
+                        <div className="space-y-6">
+                            {/* Nom de l'organisme */}
+                            <div>
+                                <label htmlFor="org-name" className="block text-sm font-medium text-gray-300 mb-1">Nom de l'organisme *</label>
+                                <input
+                                    id="org-name"
+                                    type="text"
+                                    value={formData.name}
+                                    onChange={e => setFormData(prev => ({ ...prev, name: e.target.value }))}
+                                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Nom de l'organisme"
+                                />
+                            </div>
+
+                            {/* Responsable */}
+                            <div>
+                                <label htmlFor="org-responsable" className="block text-sm font-medium text-gray-300 mb-1">Nom du responsable</label>
+                                <input
+                                    id="org-responsable"
+                                    type="text"
+                                    value={formData.responsableName}
+                                    onChange={e => setFormData(prev => ({ ...prev, responsableName: e.target.value }))}
+                                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="Jean Dupont"
+                                />
+                            </div>
+
+                            {/* SIRET (lecture seule) */}
+                            <div>
+                                <label className="block text-sm font-medium text-gray-300 mb-1">SIRET</label>
+                                <input
+                                    type="text"
+                                    value={organization.siret || ''}
+                                    disabled
+                                    className="w-full px-4 py-2.5 bg-slate-900 border border-slate-700 rounded-lg text-gray-500 cursor-not-allowed"
+                                />
+                                <p className="text-xs text-gray-500 mt-1">Le SIRET ne peut pas être modifié. Contactez le support si nécessaire.</p>
+                            </div>
+
+                            {/* NDA */}
+                            <div>
+                                <label htmlFor="org-nda" className="block text-sm font-medium text-gray-300 mb-1">Numéro de Déclaration d'Activité (NDA)</label>
+                                <input
+                                    id="org-nda"
+                                    type="text"
+                                    value={formData.ndaNumber}
+                                    onChange={e => setFormData(prev => ({ ...prev, ndaNumber: e.target.value }))}
+                                    className="w-full px-4 py-2.5 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                    placeholder="11 75 xxxxx 75"
+                                />
+                            </div>
+
+                            {/* Qualiopi */}
+                            <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-4 space-y-4">
+                                <div className="flex items-center gap-3">
+                                    <input
+                                        id="org-qualiopi"
+                                        type="checkbox"
+                                        checked={formData.qualiopiCertified}
+                                        onChange={e => setFormData(prev => ({ ...prev, qualiopiCertified: e.target.checked }))}
+                                        className="w-5 h-5 rounded border-gray-600 bg-slate-700 text-blue-600 focus:ring-blue-500 focus:ring-offset-0"
+                                    />
+                                    <label htmlFor="org-qualiopi" className="text-sm font-medium text-gray-300">
+                                        Certification Qualiopi obtenue
+                                    </label>
+                                </div>
+
+                                {formData.qualiopiCertified && (
+                                    <div>
+                                        <label htmlFor="org-qualiopi-expiry" className="block text-sm font-medium text-gray-300 mb-1">
+                                            Date d'expiration Qualiopi
+                                        </label>
+                                        <input
+                                            id="org-qualiopi-expiry"
+                                            type="date"
+                                            value={formData.qualiopiExpiry}
+                                            onChange={e => setFormData(prev => ({ ...prev, qualiopiExpiry: e.target.value }))}
+                                            className="w-full px-4 py-2.5 bg-slate-800 border border-slate-600 rounded-lg text-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                                        />
+                                        {formData.qualiopiExpiry && new Date(formData.qualiopiExpiry) < new Date() && (
+                                            <p className="text-xs text-red-400 mt-1 flex items-center gap-1">
+                                                <svg className="w-3.5 h-3.5" fill="currentColor" viewBox="0 0 20 20">
+                                                    <path fillRule="evenodd" d="M8.257 3.099c.765-1.36 2.722-1.36 3.486 0l5.58 9.92c.75 1.334-.213 2.98-1.742 2.98H4.42c-1.53 0-2.493-1.646-1.743-2.98l5.58-9.92zM11 13a1 1 0 11-2 0 1 1 0 012 0zm-1-8a1 1 0 00-1 1v3a1 1 0 002 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                                                </svg>
+                                                Certification expirée — non-conformité !
+                                            </p>
+                                        )}
+                                    </div>
+                                )}
+                            </div>
+
+                            {/* Bouton Enregistrer */}
+                            <div className="flex justify-end pt-2">
+                                <button
+                                    onClick={handleSaveGeneral}
+                                    disabled={saving || !formData.name}
+                                    className="px-6 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
+                                >
+                                    {saving ? (
+                                        <>
+                                            <svg className="animate-spin w-4 h-4" fill="none" viewBox="0 0 24 24">
+                                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
+                                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z" />
+                                            </svg>
+                                            Enregistrement...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                                            </svg>
+                                            Enregistrer les modifications
+                                        </>
+                                    )}
+                                </button>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* ═══ IDENTITÉ VISUELLE ═══ */}
                     {activeTab === 'identity' && (
                         <div className="space-y-4">
                             <FileUploadField

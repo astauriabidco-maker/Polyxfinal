@@ -5,7 +5,7 @@
  * Un utilisateur peut appartenir à plusieurs organisations avec accès à plusieurs sites.
  */
 
-import { Role, OrganizationType, MembershipScope } from '@prisma/client';
+import { OrganizationType, MembershipScope } from '@prisma/client';
 import { SystemRoleCode } from '@/lib/constants/roles';
 
 // Type pour un site accessible
@@ -14,13 +14,24 @@ export interface AccessibleSite {
     name: string;
 }
 
+/**
+ * Shape réelle du rôle tel qu'il arrive depuis le JOIN Prisma
+ * (membership → role relation). Remplace l'ancien `Role` enum.
+ */
+export interface RoleInfo {
+    id: string;
+    code: string;
+    name: string;
+}
+
 // Type pour un membership dans la session
 export interface MembershipInfo {
     organizationId: string;
     organizationName: string;
     organizationType: OrganizationType;
-    role: Role; // Full Role object
+    role: RoleInfo;
     scope: MembershipScope;
+    siteName?: string | null;
     accessibleSites: AccessibleSite[];
 }
 
@@ -32,13 +43,16 @@ declare module 'next-auth' {
         prenom: string;
         // Current membership context
         currentMembershipId: string;
-        role: Role; // Full Role object
+        role: RoleInfo;
         organizationId: string;
         organizationType: OrganizationType;
         organizationName: string;
         scope: MembershipScope;
+        siteName?: string | null;
         // All memberships for switcher
         memberships: MembershipInfo[];
+        // Force password change
+        mustChangePassword?: boolean;
     }
 
     interface Session {
@@ -49,13 +63,16 @@ declare module 'next-auth' {
             prenom: string;
             // Current membership context
             currentMembershipId: string;
-            role: Role; // Full Role object
+            role: RoleInfo;
             organizationId: string;
             organizationType: OrganizationType;
             organizationName: string;
             scope: MembershipScope;
+            siteName?: string | null;
             // All memberships for switcher
             memberships: MembershipInfo[];
+            // Force password change
+            mustChangePassword?: boolean;
         };
     }
 }
@@ -67,13 +84,16 @@ declare module '@auth/core/jwt' {
         prenom: string;
         // Current membership context
         currentMembershipId: string;
-        role: Role; // Full Role object
+        role: RoleInfo;
         organizationId: string;
         organizationType: OrganizationType;
         organizationName: string;
         scope: MembershipScope;
+        siteName?: string | null;
         // All memberships for switcher
         memberships: MembershipInfo[];
+        // Force password change
+        mustChangePassword?: boolean;
     }
 }
 
@@ -112,7 +132,7 @@ export const TRANSITION_PERMISSIONS: Record<string, SystemRoleCode[]> = {
 /**
  * Vérifie si un rôle peut effectuer une action
  */
-export function canPerformAction(role: Role, action: string): boolean {
+export function canPerformAction(role: RoleInfo, action: string): boolean {
     const allowedRoles = TRANSITION_PERMISSIONS[action];
     if (!allowedRoles) {
         // Action non définie = Admin only

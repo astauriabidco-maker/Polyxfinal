@@ -8,9 +8,10 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
-import { Role, MembershipScope } from '@prisma/client';
+import { MembershipScope } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import crypto from 'crypto';
+import { userCreateSchema, parseBody } from '@/lib/validation';
 
 /**
  * GET /api/users
@@ -76,6 +77,20 @@ export async function GET(request: NextRequest) {
             createdAt: m.user.createdAt,
         }));
 
+        // ── Scope enforcement : RESTRICTED ne voit que les membres de ses sites ──
+        const currentMembership = memberships.find(
+            (m) => m.userId === session.user.id
+        );
+        if (currentMembership?.scope === 'RESTRICTED') {
+            const mySiteIds = new Set(
+                currentMembership.siteAccess.map((sa) => sa.siteId)
+            );
+            const filteredUsers = users.filter((u) =>
+                u.sites.some((s) => mySiteIds.has(s.id))
+            );
+            return NextResponse.json({ users: filteredUsers });
+        }
+
         return NextResponse.json({ users });
     } catch (error) {
         console.error('Erreur GET /api/users:', error);
@@ -98,18 +113,17 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { email, nom, prenom, telephone, role, scope, siteIds, organizationId } = body;
 
-        console.log('DEBUG POST /api/users:', { email, role, scope, organizationId, sessionOrgId: session.user.organizationId });
+        // Validation Zod
+        const parsed = parseBody(userCreateSchema, body);
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: parsed.error, errors: parsed.errors },
+                { status: 400 }
+            );
+        }
 
-        // Validation de base
-        if (!organizationId) {
-            console.error('DEBUG Error: Organization ID missing');
-            return NextResponse.json({ error: 'Organization ID requis' }, { status: 400 });
-        }
-        if (!email || !nom || !prenom) {
-            return NextResponse.json({ error: 'Email, nom et prénom sont requis' }, { status: 400 });
-        }
+        const { email, nom, prenom, telephone, role, scope, siteIds, organizationId, password: providedPassword } = parsed.data;
 
         // Vérifier que l'utilisateur courant est ADMIN de l'organisation CIBLE
         const currentMembership = await prisma.membership.findUnique({
@@ -174,6 +188,7 @@ export async function POST(request: NextRequest) {
                     telephone: telephone || null,
                     passwordHash: hashedPassword,
                     isActive: true,
+                    mustChangePassword: true,
                 },
             });
             isNewUser = true;

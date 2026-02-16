@@ -11,7 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { validateOrganizationCreation } from '@/lib/compliance';
-import { ROLE_IDS } from '@/lib/constants/roles';
+import { getSystemRoleId } from '@/lib/constants/roles';
 
 /**
  * POST /api/organizations
@@ -116,11 +116,12 @@ export async function POST(request: NextRequest) {
 
         // Créer le membership pour l'utilisateur qui crée (ADMIN)
         if (session.user.id) {
+            const adminRoleId = await getSystemRoleId('ADMIN');
             await prisma.membership.create({
                 data: {
                     user: { connect: { id: session.user.id } },
                     organization: { connect: { id: organization.id } },
-                    role: { connect: { id: ROLE_IDS.ADMIN } },
+                    role: { connect: { id: adminRoleId } },
                     scope: 'GLOBAL',
                 },
             });

@@ -27,6 +27,7 @@ interface Props {
     dipSentAt?: string | null;
     dipSignedAt?: string | null;
     createdOrgId?: string | null;
+    doubinDelayDays?: number;
 }
 
 export default function CandidateActionButtons({
@@ -34,14 +35,15 @@ export default function CandidateActionButtons({
     currentStatus,
     dipSentAt,
     dipSignedAt,
-    createdOrgId
+    createdOrgId,
+    doubinDelayDays = 20
 }: Props) {
     const [isPending, startTransition] = useTransition();
     const [error, setError] = useState<string | null>(null);
 
     const nextStatus = NEXT_STATUS[currentStatus];
 
-    // Calcul Loi Doubin (20 jours)
+    // Calcul Loi Doubin (délai configurable)
     const dipDate = dipSentAt || dipSignedAt;
     let daysRemaining = 0;
     let isLocked = false;
@@ -50,8 +52,8 @@ export default function CandidateActionButtons({
         const d = new Date(dipDate);
         const now = new Date();
         const diffDays = Math.floor((now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24));
-        if (diffDays < 20) {
-            daysRemaining = 20 - diffDays;
+        if (diffDays < doubinDelayDays) {
+            daysRemaining = doubinDelayDays - diffDays;
             isLocked = true;
         }
     }
@@ -181,7 +183,7 @@ export default function CandidateActionButtons({
             {isLocked && (
                 <div className="flex items-center gap-2 p-2 rounded bg-orange-500/10 border border-orange-500/20">
                     <span className="text-[10px] text-orange-400 font-medium">
-                        ⚖️ Loi Doubin : Attente légale de 20 jours ({daysRemaining}j restants)
+                        ⚖️ Loi Doubin : Attente légale de {doubinDelayDays} jours ({daysRemaining}j restants)
                     </span>
                 </div>
             )}

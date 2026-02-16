@@ -6,13 +6,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { dispatchLead } from '@/lib/network/dispatch';
-import { z } from 'zod';
-
-const dispatchSchema = z.object({
-    dossierId: z.string().min(1, 'dossierId requis'),
-    studentZipCode: z.string().min(4, 'Code postal requis'),
-});
+import { dispatchLead } from '@/lib/dossiers/dispatch';
+import { dispatchLeadSchema } from '@/lib/validation';
 
 export async function POST(req: NextRequest) {
     const session = await auth();
@@ -20,8 +15,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
     }
 
+    // Seuls les ADMIN peuvent dispatcher des leads
+    if (session.user.role?.code !== 'ADMIN') {
+        return NextResponse.json({ error: 'Accès réservé aux administrateurs' }, { status: 403 });
+    }
+
     const body = await req.json();
-    const parsed = dispatchSchema.safeParse(body);
+    const parsed = dispatchLeadSchema.safeParse(body);
 
     if (!parsed.success) {
         return NextResponse.json(

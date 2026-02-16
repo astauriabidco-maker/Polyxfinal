@@ -10,6 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { roleUpdateSchema, parseBody } from '@/lib/validation';
 
 // ─── PUT /api/roles/[id] ────────────────────────────────────
 
@@ -24,9 +25,7 @@ export async function PUT(
         }
 
         // RBAC: ADMIN uniquement
-        const roleObj = session.user.role;
-        const roleCode = typeof roleObj === 'string' ? roleObj : roleObj?.code;
-        if (roleCode !== 'ADMIN') {
+        if (session.user.role?.code !== 'ADMIN') {
             return NextResponse.json(
                 { error: 'Seuls les administrateurs peuvent modifier des rôles.' },
                 { status: 403 }
@@ -61,11 +60,17 @@ export async function PUT(
         }
 
         const body = await request.json();
-        const { name, description } = body;
 
-        if (!name) {
-            return NextResponse.json({ error: 'Le nom du rôle est requis.' }, { status: 400 });
+        // Validation Zod
+        const parsed = parseBody(roleUpdateSchema, body);
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: parsed.error, errors: parsed.errors },
+                { status: 400 }
+            );
         }
+
+        const { name, description } = parsed.data;
 
         // Vérifier l'unicité du nom dans le contexte de l'org
         const duplicateName = await prisma.role.findFirst({
@@ -95,7 +100,7 @@ export async function PUT(
         await prisma.auditLog.create({
             data: {
                 userId: session.user.id,
-                userRole: roleCode || 'ADMIN',
+                userRole: session.user.role?.code || 'ADMIN',
                 organizationId: session.user.organizationId,
                 action: 'ROLE_UPDATE',
                 entityType: 'Role',
@@ -135,9 +140,7 @@ export async function DELETE(
         }
 
         // RBAC: ADMIN uniquement
-        const roleObj = session.user.role;
-        const roleCode = typeof roleObj === 'string' ? roleObj : roleObj?.code;
-        if (roleCode !== 'ADMIN') {
+        if (session.user.role?.code !== 'ADMIN') {
             return NextResponse.json(
                 { error: 'Seuls les administrateurs peuvent supprimer des rôles.' },
                 { status: 403 }
@@ -196,7 +199,7 @@ export async function DELETE(
         await prisma.auditLog.create({
             data: {
                 userId: session.user.id,
-                userRole: roleCode || 'ADMIN',
+                userRole: session.user.role?.code || 'ADMIN',
                 organizationId: session.user.organizationId,
                 action: 'ROLE_DELETE',
                 entityType: 'Role',

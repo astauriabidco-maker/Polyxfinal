@@ -1,10 +1,13 @@
 import { prisma } from '@/lib/prisma';
 import { NetworkType, MembershipScope, OrganizationType } from '@prisma/client';
-import { ROLE_IDS } from '@/lib/constants/roles';
+import { getSystemRoleId } from '@/lib/constants/roles';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 /**
  * Convertit un candidat signé en une organisation (franchise) opérationnelle.
  * Crée également le site principal et le compte admin du franchisé.
+ * Génère un mot de passe temporaire que l'admin devra changer à la première connexion.
  */
 export async function convertCandidateToFranchise(candidateId: string) {
     return await prisma.$transaction(async (tx) => {
@@ -44,34 +47,42 @@ export async function convertCandidateToFranchise(candidateId: string) {
         });
 
         // 4. Gérer l'Utilisateur Franchisé
-        // On cherche par email. S'il n'existe pas, on le crée.
         let user = await tx.user.findUnique({
             where: { email: candidate.email },
         });
 
+        let tempPassword: string | null = null;
+
         if (!user) {
+            // Générer un mot de passe temporaire sécurisé
+            tempPassword = crypto.randomBytes(6).toString('base64url'); // ~8 chars
+            const hashedPassword = await bcrypt.hash(tempPassword, 10);
+
             user = await tx.user.create({
                 data: {
                     email: candidate.email,
                     nom: candidate.representantNom,
                     prenom: candidate.representantPrenom,
+                    passwordHash: hashedPassword,
+                    mustChangePassword: true,
+                    isActive: true,
                 },
             });
         }
 
         // 5. Créer le Membership ADMIN sur la nouvelle org
-        // @ts-expect-error - Prisma type mismatch for role connect
+        const adminRoleId = await getSystemRoleId('ADMIN');
         await tx.membership.create({
             data: {
                 user: { connect: { id: user.id } },
                 organization: { connect: { id: newOrg.id } },
-                role: { connect: { id: ROLE_IDS.ADMIN } },
+                role: { connect: { id: adminRoleId } },
                 scope: MembershipScope.GLOBAL,
                 isActive: true,
             },
         });
 
-        // 5-bis. Lier l'admin au site siège (traçabilité du site principal)
+        // 5-bis. Lier l'admin au site siège
         await tx.membershipSiteAccess.create({
             data: {
                 membershipUserId: user.id,
@@ -104,6 +115,8 @@ export async function convertCandidateToFranchise(candidateId: string) {
             success: true,
             orgId: newOrg.id,
             userId: user.id,
+            tempPassword, // null si l'utilisateur existait déjà
         };
     });
 }
+

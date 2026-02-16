@@ -135,13 +135,13 @@ export function PortfolioGrid({ items }: PortfolioGridProps) {
                             )}
                         </div>
 
-                        {/* Footer - Action */}
-                        <div className="p-5 pt-0">
+                        {/* Footer - Actions */}
+                        <div className="p-5 pt-0 flex gap-2">
                             <button
                                 onClick={() => handleAccess(item.organizationId)}
                                 disabled={isLoading}
                                 className={`
-                                    w-full py-3 px-4 rounded-lg font-medium transition-all
+                                    flex-1 py-3 px-4 rounded-lg font-medium transition-all
                                     ${isLoading
                                         ? 'bg-slate-700 text-slate-400 cursor-wait'
                                         : 'bg-blue-600 hover:bg-blue-500 text-white'}
@@ -170,6 +170,16 @@ export function PortfolioGrid({ items }: PortfolioGridProps) {
                                 ) : (
                                     'Accéder au tableau de bord'
                                 )}
+                            </button>
+                            <button
+                                onClick={() => router.push(`/organizations/${item.organizationId}/settings`)}
+                                disabled={isLoading}
+                                title="Modifier l'organisation"
+                                className="py-3 px-4 rounded-lg font-medium transition-all bg-slate-700 hover:bg-slate-600 text-slate-300 hover:text-white border border-slate-600 hover:border-slate-500"
+                            >
+                                <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                </svg>
                             </button>
                         </div>
                     </div>

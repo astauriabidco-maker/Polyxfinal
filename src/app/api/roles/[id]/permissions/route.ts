@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { rolePermissionsSchema, parseBody } from '@/lib/validation';
 
 // ─── GET /api/roles/[id]/permissions ────────────────────────
 
@@ -91,9 +92,7 @@ export async function PUT(
         }
 
         // RBAC: ADMIN uniquement
-        const roleObj = session.user.role;
-        const roleCode = typeof roleObj === 'string' ? roleObj : roleObj?.code;
-        if (roleCode !== 'ADMIN') {
+        if (session.user.role?.code !== 'ADMIN') {
             return NextResponse.json(
                 { error: 'Seuls les administrateurs peuvent modifier les permissions.' },
                 { status: 403 }
@@ -112,14 +111,17 @@ export async function PUT(
         }
 
         const body = await request.json();
-        const { permissionIds } = body;
 
-        if (!Array.isArray(permissionIds)) {
+        // Validation Zod
+        const parsed = parseBody(rolePermissionsSchema, body);
+        if (!parsed.success) {
             return NextResponse.json(
-                { error: 'permissionIds doit être un tableau.' },
+                { error: parsed.error, errors: parsed.errors },
                 { status: 400 }
             );
         }
+
+        const { permissionIds } = parsed.data;
 
         // Vérifier que toutes les permissions existent
         const validPermissions = await prisma.permission.findMany({
@@ -152,7 +154,7 @@ export async function PUT(
         await prisma.auditLog.create({
             data: {
                 userId: session.user.id,
-                userRole: roleCode || 'ADMIN',
+                userRole: session.user.role?.code || 'ADMIN',
                 organizationId: session.user.organizationId,
                 action: 'ROLE_PERMISSIONS_UPDATE',
                 entityType: 'Role',

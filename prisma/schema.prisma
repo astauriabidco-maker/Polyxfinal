@@ -116,6 +116,7 @@ model User {
   prenom            String
   telephone         String?
   isActive          Boolean       @default(true)
+  mustChangePassword Boolean      @default(false)
   createdAt         DateTime      @default(now())
   updatedAt         DateTime      @updatedAt
   auditLogs         AuditLog[]
@@ -753,6 +754,7 @@ model NetworkSettings {
   activationEmailSubject   String       @default("Activation de votre accès API - Polyx ERP")
   activationEmailBody      String       @db.Text
   apiDocumentationMarkdown String       @db.Text
+  doubinDelayDays          Int          @default(20)
   updatedAt                DateTime     @updatedAt
   organization             Organization @relation(fields: [organizationId], references: [id])
 }

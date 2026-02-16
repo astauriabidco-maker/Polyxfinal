@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { siteCreateSchema, parseBody } from '@/lib/validation';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -96,40 +97,34 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
         const { id } = await params;
         const body = await request.json();
 
-        // Vérifier accès ADMIN
-        const memberships = session.user.memberships || [];
-        const membership = memberships.find(m => m.organizationId === id);
+        // Vérifier accès ADMIN via la DB (toujours à jour)
+        const currentMembership = await prisma.membership.findUnique({
+            where: {
+                userId_organizationId: {
+                    userId: session.user.id!,
+                    organizationId: id,
+                },
+            },
+            include: { role: true },
+        });
 
-        if (!membership || membership.role.code !== 'ADMIN') {
+        if (!currentMembership || currentMembership.role.code !== 'ADMIN') {
             return NextResponse.json(
                 { error: 'Droits insuffisants' },
                 { status: 403 }
             );
         }
 
-        const { name, city, zipCode, address, uaiCode, siretNic, isHeadquarters } = body;
-
-        // Validations
-        if (!name?.trim()) {
+        // Validation Zod
+        const parsed = parseBody(siteCreateSchema, body);
+        if (!parsed.success) {
             return NextResponse.json(
-                { error: 'Le nom du site est obligatoire' },
+                { error: parsed.error, errors: parsed.errors },
                 { status: 400 }
             );
         }
 
-        if (!city?.trim()) {
-            return NextResponse.json(
-                { error: 'La ville est obligatoire' },
-                { status: 400 }
-            );
-        }
-
-        if (!zipCode?.trim()) {
-            return NextResponse.json(
-                { error: 'Le code postal est obligatoire' },
-                { status: 400 }
-            );
-        }
+        const { name, city, zipCode, address, uaiCode, siretNic, isHeadquarters } = parsed.data;
 
         // Vérifier unicité du nom dans l'organisation
         const existingSite = await prisma.site.findFirst({
@@ -201,7 +196,7 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
             data: {
                 organizationId: id,
                 userId: session.user.id!,
-                userRole: membership.role.code,
+                userRole: currentMembership.role.code,
                 action: 'CREATE_SITE',
                 niveauAction: 'EDITION',
                 entityType: 'Site',

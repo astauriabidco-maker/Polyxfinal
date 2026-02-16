@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { organizationPatchSchema, parseBody } from '@/lib/validation';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -106,42 +107,36 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
         const { id } = await params;
         const body = await request.json();
 
-        // Vérifier que l'utilisateur a accès à cette organisation avec rôle ADMIN
-        const memberships = session.user.memberships || [];
-        const membership = memberships.find(m => m.organizationId === id);
+        // Vérifier que l'utilisateur est ADMIN via la DB (toujours à jour)
+        const currentMembership = await prisma.membership.findUnique({
+            where: {
+                userId_organizationId: {
+                    userId: session.user.id!,
+                    organizationId: id,
+                },
+            },
+            include: { role: true },
+        });
 
-        if (!membership || membership.role.code !== 'ADMIN') {
+        if (!currentMembership || currentMembership.role.code !== 'ADMIN') {
             return NextResponse.json(
                 { error: 'Droits insuffisants' },
                 { status: 403 }
             );
         }
 
-        // Champs modifiables
-        const allowedFields = [
-            'name',
-            'responsableName',
-            'ndaNumber',
-            'qualiopiCertified',
-            'qualiopiExpiry',
-            'logoUrl',
-            'signatureUrl',
-            'cachetUrl',
-            'cgvUrl',
-            'livretAccueilUrl',
-            'reglementInterieurUrl',
-        ];
-
-        const updateData: Record<string, unknown> = {};
-        for (const field of allowedFields) {
-            if (body[field] !== undefined) {
-                updateData[field] = body[field];
-            }
+        // Validation Zod
+        const parsed = parseBody(organizationPatchSchema, body);
+        if (!parsed.success) {
+            return NextResponse.json(
+                { error: parsed.error, errors: parsed.errors },
+                { status: 400 }
+            );
         }
 
         const organization = await prisma.organization.update({
             where: { id },
-            data: updateData,
+            data: parsed.data,
         });
 
         return NextResponse.json({
@@ -151,6 +146,86 @@ export async function PATCH(request: NextRequest, { params }: RouteParams) {
 
     } catch (error) {
         console.error('[API Organization PATCH] Error:', error);
+        return NextResponse.json(
+            { error: 'Erreur interne du serveur' },
+            { status: 500 }
+        );
+    }
+}
+
+/**
+ * DELETE /api/organizations/[id]
+ * Soft-delete : désactive l'organisation (isActive = false)
+ */
+export async function DELETE(request: NextRequest, { params }: RouteParams) {
+    try {
+        const session = await auth();
+        if (!session?.user) {
+            return NextResponse.json(
+                { error: 'Non authentifié' },
+                { status: 401 }
+            );
+        }
+
+        const { id } = await params;
+
+        // Vérifier que l'utilisateur est ADMIN via la DB (toujours à jour)
+        const currentMembership = await prisma.membership.findUnique({
+            where: {
+                userId_organizationId: {
+                    userId: session.user.id!,
+                    organizationId: id,
+                },
+            },
+            include: { role: true },
+        });
+
+        if (!currentMembership || currentMembership.role.code !== 'ADMIN') {
+            return NextResponse.json(
+                { error: 'Droits insuffisants — seuls les administrateurs peuvent désactiver une organisation.' },
+                { status: 403 }
+            );
+        }
+
+        // Vérifier qu'il n'y a pas de dossiers actifs
+        const activeDossiers = await prisma.dossier.count({
+            where: { organizationId: id, NOT: { status: 'ABANDONNE' } },
+        });
+
+        if (activeDossiers > 0) {
+            return NextResponse.json(
+                { error: `Impossible de désactiver : ${activeDossiers} dossier(s) actif(s). Clôturez-les d'abord.` },
+                { status: 409 }
+            );
+        }
+
+        // Soft-delete
+        const organization = await prisma.organization.update({
+            where: { id },
+            data: { isActive: false },
+        });
+
+        // Audit log
+        await prisma.auditLog.create({
+            data: {
+                organizationId: id,
+                userId: session.user.id!,
+                userRole: 'ADMIN',
+                action: 'DEACTIVATE_ORGANIZATION',
+                niveauAction: 'VALIDATION',
+                entityType: 'Organization',
+                entityId: id,
+                newState: { isActive: false, name: organization.name },
+            },
+        });
+
+        return NextResponse.json({
+            success: true,
+            message: `L'organisation "${organization.name}" a été désactivée.`,
+        });
+
+    } catch (error) {
+        console.error('[API Organization DELETE] Error:', error);
         return NextResponse.json(
             { error: 'Erreur interne du serveur' },
             { status: 500 }

@@ -278,18 +278,25 @@ export async function updateCandidateStatus(formData: FormData) {
             newMotivation = 0;
         }
 
-        // --- Loi Doubin Verification ---
+        // --- Loi Doubin Verification (délai configurable) ---
         if (parsed.data.newStatus === 'SIGNED') {
             const dipDate = candidate.dipSentAt || candidate.dipSignedAt;
             if (!dipDate) {
                 return { error: 'Loi Doubin : Le DIP doit être envoyé avant de signer le contrat.' };
             }
 
+            // Charger le délai configurable depuis NetworkSettings
+            const networkSettings = await prisma.networkSettings.findFirst({
+                where: { organizationId: orgId },
+                select: { doubinDelayDays: true },
+            });
+            const doubinDelay = networkSettings?.doubinDelayDays ?? 20;
+
             const now = new Date();
             const daysSinceDIP = Math.floor((now.getTime() - dipDate.getTime()) / (1000 * 60 * 60 * 24));
 
-            if (daysSinceDIP < 20) {
-                return { error: `Loi Doubin : Le délai légal de 20 jours n'est pas encore révolu (${daysSinceDIP}/20 jours).` };
+            if (daysSinceDIP < doubinDelay) {
+                return { error: `Loi Doubin : Le délai légal de ${doubinDelay} jours n'est pas encore révolu (${daysSinceDIP}/${doubinDelay} jours).` };
             }
         }
 

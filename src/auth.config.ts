@@ -11,7 +11,7 @@ import Credentials from 'next-auth/providers/credentials';
 import bcrypt from 'bcryptjs';
 import { z } from 'zod';
 import { prisma } from '@/lib/prisma';
-import { Role, MembershipScope, OrganizationType } from '@prisma/client';
+import type { MembershipInfo } from '@/lib/auth/types';
 
 // ─── Zod Schemas ──────────────────────────────────────────────
 
@@ -30,15 +30,7 @@ const loginSchema = z.object({
 
 // ─── Types internes (pas d'export, pas de any) ───────────────
 
-interface MembershipData {
-    organizationId: string;
-    organizationName: string;
-    organizationType: OrganizationType;
-    role: Role;
-    scope: MembershipScope;
-    siteName: string | null;
-    accessibleSites: { id: string; name: string }[];
-}
+// MembershipData type is now defined globally as MembershipInfo in src/types/next-auth.d.ts
 
 // ─── Config ───────────────────────────────────────────────────
 
@@ -75,6 +67,11 @@ export const authConfig: NextAuthConfig = {
                 return false; // NextAuth redirige vers /login
             }
 
+            // Force password change redirect
+            if ((auth?.user as any)?.mustChangePassword && !nextUrl.pathname.startsWith('/change-password')) {
+                return Response.redirect(new URL('/change-password', nextUrl));
+            }
+
             return true;
         },
 
@@ -92,6 +89,7 @@ export const authConfig: NextAuthConfig = {
                 token.scope = user.scope;
                 token.siteName = user.siteName;
                 token.memberships = user.memberships;
+                token.mustChangePassword = user.mustChangePassword;
             }
 
             // Context switch (changement d'organisation)
@@ -126,6 +124,7 @@ export const authConfig: NextAuthConfig = {
                 session.user.scope = token.scope;
                 (session.user as any).siteName = token.siteName;
                 session.user.memberships = token.memberships;
+                (session.user as any).mustChangePassword = token.mustChangePassword;
             }
             return session;
         },
@@ -163,13 +162,20 @@ export const authConfig: NextAuthConfig = {
                             nom: true,
                             prenom: true,
                             isActive: true,
+                            mustChangePassword: true,
                             memberships: {
                                 where: { isActive: true },
                                 orderBy: { lastAccessedAt: 'desc' },
                                 select: {
                                     userId: true,
                                     organizationId: true,
-                                    role: true,
+                                    role: {
+                                        select: {
+                                            id: true,
+                                            code: true,
+                                            name: true,
+                                        },
+                                    },
                                     scope: true,
                                     siteAccess: {
                                         select: {
@@ -225,7 +231,7 @@ export const authConfig: NextAuthConfig = {
                     console.log(`[Auth] ${activeMemberships.length} active membership(s)`);
 
                     // ── 6. Build response ─────────────────────────
-                    const membershipsList: any[] = activeMemberships.map(m => ({
+                    const membershipsList: MembershipInfo[] = activeMemberships.map(m => ({
                         organizationId: m.organization.id,
                         organizationName: m.organization.name,
                         organizationType: m.organization.type,
@@ -253,6 +259,7 @@ export const authConfig: NextAuthConfig = {
                         scope: primaryMembership.scope,
                         siteName: primaryMembershipInfo.siteName,
                         memberships: membershipsList,
+                        mustChangePassword: user.mustChangePassword ?? false,
                     };
                 } catch (error) {
                     console.error('[Auth] Database error during authorization:', error);

@@ -12,7 +12,7 @@ import { prisma } from '@/lib/prisma';
 import { Role, MembershipScope } from '@prisma/client';
 
 interface RouteParams {
-    params: { id: string };
+    params: Promise<{ id: string }>;
 }
 
 /**
@@ -25,7 +25,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
         }
 
-        const userId = params.id;
+        const { id: userId } = await params;
         const organizationId = session.user.organizationId;
 
         const membership = await prisma.membership.findUnique({
@@ -58,7 +58,6 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
                 email: membership.user.email,
                 nom: membership.user.nom,
                 prenom: membership.user.prenom,
-                telephone: membership.user.telephone,
                 telephone: membership.user.telephone,
                 role: membership.role.code,
                 roleLabel: membership.role.name,
@@ -103,7 +102,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             );
         }
 
-        const userId = params.id;
+        const { id: userId } = await params;
         const organizationId = session.user.organizationId;
         const body = await request.json();
         const { role, scope, siteIds } = body;
@@ -218,7 +217,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
             );
         }
 
-        const userId = params.id;
+        const { id: userId } = await params;
         const organizationId = session.user.organizationId;
 
         // Empêcher l'auto-suppression

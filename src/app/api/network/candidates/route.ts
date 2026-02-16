@@ -8,24 +8,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
-import { z } from 'zod';
+import { createCandidateApiSchema } from '@/lib/validation';
 import { Decimal } from '@prisma/client/runtime/library';
-
-// ─── Validation ───────────────────────────────────────────────
-
-const createCandidateSchema = z.object({
-    organizationId: z.string().min(1),
-    companyName: z.string().min(2, 'Raison sociale requise'),
-    email: z.string().email('Email invalide'),
-    phone: z.string().optional(),
-    representantNom: z.string().min(1, 'Nom requis'),
-    representantPrenom: z.string().min(1, 'Prénom requis'),
-    franchiseType: z.enum(['OF', 'CFA']).default('OF'),
-    targetZone: z.string().optional(),
-    targetZipCodes: z.array(z.string()).default([]),
-    investmentBudget: z.number().positive().optional(),
-    notes: z.string().optional(),
-});
 
 // ─── GET ──────────────────────────────────────────────────────
 
@@ -56,8 +40,13 @@ export async function POST(req: NextRequest) {
         return NextResponse.json({ error: 'Non authentifié' }, { status: 401 });
     }
 
+    // Seuls les ADMIN peuvent créer des candidats franchise
+    if (session.user.role?.code !== 'ADMIN') {
+        return NextResponse.json({ error: 'Accès réservé aux administrateurs' }, { status: 403 });
+    }
+
     const body = await req.json();
-    const parsed = createCandidateSchema.safeParse(body);
+    const parsed = createCandidateApiSchema.safeParse(body);
 
     if (!parsed.success) {
         return NextResponse.json(

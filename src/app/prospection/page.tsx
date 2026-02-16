@@ -29,9 +29,10 @@ export default async function ProspectionPage() {
                 organizationId,
             },
         },
+        include: { role: true },
     });
 
-    const isAdmin = membership?.role.code === 'ADMIN';
+    const isAdmin = membership?.role?.code === 'ADMIN';
 
     // Récupérer les leads
     const leads = await prisma.lead.findMany({
@@ -73,14 +74,26 @@ export default async function ProspectionPage() {
     };
 
     const serializedLeads = leads.map(l => ({
-        ...l,
-        createdAt: l.createdAt.toISOString(),
-        updatedAt: l.updatedAt.toISOString(),
-        convertedAt: l.convertedAt?.toISOString() || null,
-        leadConsent: l.leadConsent ? {
-            ...l.leadConsent,
+        id: l.id,
+        email: l.email,
+        nom: l.nom,
+        prenom: l.prenom,
+        telephone: l.telephone,
+        source: l.source,
+        status: l.status,
+        score: l.score,
+        notes: l.notes,
+        formationSouhaitee: l.formationSouhaitee,
+        codePostal: l.codePostal,
+        ville: l.ville,
+        campaign: l.campaign,
+        partner: l.partner,
+        consent: l.leadConsent ? {
+            consentGiven: l.leadConsent.consentGiven,
+            legalBasis: l.leadConsent.legalBasis,
             anonymizedAt: l.leadConsent.anonymizedAt?.toISOString() || null,
         } : null,
+        createdAt: l.createdAt.toISOString(),
     }));
 
     return (
@@ -111,7 +124,7 @@ export default async function ProspectionPage() {
 
                 {/* Pipeline */}
                 <LeadPipeline
-                    leads={serializedLeads as any}
+                    leads={serializedLeads}
                     stats={stats}
                     isAdmin={isAdmin}
                 />

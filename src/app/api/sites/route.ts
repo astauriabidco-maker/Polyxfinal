@@ -1,148 +1,15 @@
 /**
  * API ROUTE: Sites Management
  * ===========================
- * Endpoints pour la gestion des sites avec validation CFA (UAI).
+ * GET /api/sites - Lister les sites (agrégateur cross-org)
  * 
- * POST /api/sites - Créer un nouveau site
- * GET /api/sites - Lister les sites (filtré par org)
+ * NOTE: La création de sites se fait via POST /api/organizations/[id]/sites
+ * (endpoint canonique avec validation compliance + audit log).
  */
 
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
-import { prisma } from '@/lib/db';
-import { validateSiteCreation } from '@/lib/compliance';
-
-// POST - Créer un site
-export async function POST(request: NextRequest) {
-    try {
-        // Vérifier l'authentification
-        const session = await auth();
-        if (!session?.user) {
-            return NextResponse.json(
-                { error: 'Non authentifié' },
-                { status: 401 }
-            );
-        }
-
-        // Récupérer les données
-        const body = await request.json();
-        const { organizationId, name, address, city, postalCode, uaiCode } = body;
-
-        // Validation basique
-        if (!organizationId) {
-            return NextResponse.json(
-                { error: 'Organisation requise' },
-                { status: 400 }
-            );
-        }
-
-        if (!name?.trim()) {
-            return NextResponse.json(
-                { error: 'Nom du site requis' },
-                { status: 400 }
-            );
-        }
-
-        // Vérifier que l'utilisateur a accès à cette organisation
-        const membership = session.user.memberships?.find(
-            m => m.organizationId === organizationId
-        );
-
-        if (!membership) {
-            return NextResponse.json(
-                { error: 'Accès non autorisé à cette organisation' },
-                { status: 403 }
-            );
-        }
-
-        // Seuls les ADMIN peuvent créer des sites
-        if (membership.role.code !== 'ADMIN') {
-            return NextResponse.json(
-                { error: 'Seuls les administrateurs peuvent créer des sites' },
-                { status: 403 }
-            );
-        }
-
-        // Validation Compliance (UAI pour CFA)
-        const complianceResult = await validateSiteCreation(organizationId, {
-            name: name.trim(),
-            uaiCode: uaiCode || null,
-        });
-
-        if (!complianceResult.success) {
-            return NextResponse.json(
-                {
-                    error: complianceResult.errors[0],
-                    errors: complianceResult.errors,
-                    warnings: complianceResult.warnings,
-                },
-                { status: 400 }
-            );
-        }
-
-        // Vérifier unicité du code UAI
-        if (uaiCode) {
-            const existingUai = await prisma.site.findFirst({
-                where: { uaiCode: uaiCode.toUpperCase() },
-            });
-
-            if (existingUai) {
-                return NextResponse.json(
-                    { error: `Le code UAI ${uaiCode} est déjà utilisé par un autre site` },
-                    { status: 409 }
-                );
-            }
-        }
-
-        // Créer le site
-        const site = await prisma.site.create({
-            data: {
-                organizationId,
-                name: name.trim(),
-                address: address?.trim() || null,
-                city: city?.trim() || '',
-                zipCode: postalCode?.trim() || '',
-                uaiCode: uaiCode?.toUpperCase() || null,
-                isActive: true,
-            },
-        });
-
-        // Log d'audit
-        await prisma.auditLog.create({
-            data: {
-                organizationId,
-                userId: session.user.id!,
-                userRole: membership.role.code,
-                action: 'CREATE_SITE',
-                niveauAction: 'EDITION',
-                entityType: 'Site',
-                entityId: site.id,
-                phase: 0, // Configuration
-                isForced: false,
-                previousState: {},
-                newState: {
-                    name: site.name,
-                    uaiCode: site.uaiCode,
-                    address: site.address,
-                },
-            },
-        });
-
-        // Réponse avec warnings éventuels
-        return NextResponse.json({
-            success: true,
-            site,
-            warnings: complianceResult.warnings,
-        });
-
-    } catch (error) {
-        console.error('[API Sites] Erreur création:', error);
-        return NextResponse.json(
-            { error: 'Erreur interne du serveur' },
-            { status: 500 }
-        );
-    }
-}
+import { prisma } from '@/lib/prisma';
 
 // GET - Lister les sites d'une organisation ou de toutes les organisations
 export async function GET(request: NextRequest) {

@@ -20,9 +20,7 @@ export default async function RolesPage() {
     const organizationId = session.user.organizationId;
 
     // Vérifier que l'utilisateur est ADMIN
-    const roleObj = session.user.role;
-    const roleCode = typeof roleObj === 'string' ? roleObj : (roleObj as any)?.code;
-    const isAdmin = roleCode === 'ADMIN';
+    const isAdmin = session.user.role?.code === 'ADMIN';
 
     if (!isAdmin) {
         redirect('/dashboard');

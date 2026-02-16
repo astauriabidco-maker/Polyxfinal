@@ -282,13 +282,6 @@ const MENU_SECTIONS: MenuSection[] = [
                 description: 'Gérer les candidats au réseau',
             },
             {
-                id: 'dispatch',
-                label: 'Dispatch Leads',
-                href: '/network/dispatch',
-                icon: Icons.share,
-                description: 'Distribuer les leads aux franchisés',
-            },
-            {
                 id: 'territories',
                 label: 'Territoires',
                 href: '/network/territories',
@@ -301,6 +294,13 @@ const MENU_SECTIONS: MenuSection[] = [
                 href: '/network/royalties',
                 icon: Icons.coins,
                 description: 'Calcul et suivi des redevances',
+            },
+            {
+                id: 'franchise-config',
+                label: 'Configuration',
+                href: '/network/settings',
+                icon: Icons.settings,
+                description: 'Templates emails et documentation',
             },
         ],
     },
@@ -326,6 +326,7 @@ const MENU_ITEM_PERMISSION_MAP: Record<string, string> = {
     'partners': 'module:partners',
     'lead-quality': 'module:lead_quality',
     'network-config': 'module:network_config',
+    'franchise-config': 'module:network_config',
     'candidates': 'module:candidates',
     'dispatch': 'module:candidates', // same category as candidates
     'territories': 'module:territories',

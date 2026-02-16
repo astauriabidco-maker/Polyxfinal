@@ -8,6 +8,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
+import { roleCreateSchema, parseBody } from '@/lib/validation';
 
 // ─── GET /api/roles ──────────────────────────────────────────
 
@@ -78,9 +79,7 @@ export async function POST(request: NextRequest) {
         }
 
         // RBAC: ADMIN uniquement
-        const roleObj = session.user.role;
-        const roleCode = typeof roleObj === 'string' ? roleObj : roleObj?.code;
-        if (roleCode !== 'ADMIN') {
+        if (session.user.role?.code !== 'ADMIN') {
             return NextResponse.json(
                 { error: 'Seuls les administrateurs peuvent créer des rôles.' },
                 { status: 403 }
@@ -88,23 +87,17 @@ export async function POST(request: NextRequest) {
         }
 
         const body = await request.json();
-        const { name, code, description } = body;
 
-        // Validation
-        if (!name || !code) {
+        // Validation Zod
+        const parsed = parseBody(roleCreateSchema, body);
+        if (!parsed.success) {
             return NextResponse.json(
-                { error: 'Le nom et le code du rôle sont requis.' },
+                { error: parsed.error, errors: parsed.errors },
                 { status: 400 }
             );
         }
 
-        // Valider le format du code (A-Z, underscores)
-        if (!/^[A-Z][A-Z0-9_]{1,30}$/.test(code)) {
-            return NextResponse.json(
-                { error: 'Le code doit être en majuscules, commencer par une lettre, et ne contenir que des lettres, chiffres et underscores (2-31 caractères).' },
-                { status: 400 }
-            );
-        }
+        const { name, code, description } = parsed.data;
 
         const organizationId = session.user.organizationId;
 
@@ -141,7 +134,7 @@ export async function POST(request: NextRequest) {
         await prisma.auditLog.create({
             data: {
                 userId: session.user.id,
-                userRole: roleCode || 'ADMIN',
+                userRole: session.user.role?.code || 'ADMIN',
                 organizationId,
                 action: 'ROLE_CREATE',
                 entityType: 'Role',
