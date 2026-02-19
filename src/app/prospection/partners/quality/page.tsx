@@ -116,18 +116,34 @@ function gradeEmoji(grade: string): string {
 
 const STATUS_LABELS: Record<string, string> = {
     NEW: 'Nouveau',
-    CONTACTED: 'Contacté',
-    QUALIFIED: 'Qualifié',
-    CONVERTED: 'Converti',
-    LOST: 'Perdu',
+    DISPATCHED: 'Dispatché',
+    A_RAPPELER: 'A rappeler',
+    NE_REPONDS_PAS: 'Ne réponds pas',
+    PAS_INTERESSE: 'Pas intéressé',
+    RDV_PLANIFIE: 'RDV Planifié',
+    RDV_NON_HONORE: 'RDV Non Honoré',
+    COURRIERS_ENVOYES: 'Courriers Envoyés',
+    COURRIERS_RECUS: 'Courriers Reçus',
+    NEGOCIATION: 'Négociation',
+    CONVERTI: 'Converti',
+    PROBLEMES_SAV: 'Problèmes/SAV',
+    PERDU: 'Perdu',
 };
 
 const STATUS_COLORS: Record<string, string> = {
     NEW: '#818cf8',
-    CONTACTED: '#38bdf8',
-    QUALIFIED: '#a78bfa',
-    CONVERTED: '#34d399',
-    LOST: '#f87171',
+    DISPATCHED: '#38bdf8',
+    A_RAPPELER: '#fbbf24',
+    NE_REPONDS_PAS: '#fb923c',
+    PAS_INTERESSE: '#f87171',
+    RDV_PLANIFIE: '#a78bfa',
+    RDV_NON_HONORE: '#ef4444',
+    COURRIERS_ENVOYES: '#60a5fa',
+    COURRIERS_RECUS: '#22d3ee',
+    NEGOCIATION: '#f59e0b',
+    CONVERTI: '#34d399',
+    PROBLEMES_SAV: '#fb923c',
+    PERDU: '#94a3b8',
 };
 
 const PERIODS = [
@@ -536,8 +552,8 @@ function KpiCard({
                     <span className="text-2xl">{icon}</span>
                     {trend !== undefined && trend !== 0 && (
                         <span className={`text-xs font-medium px-2 py-0.5 rounded-full ${(negative ? trend < 0 : trend > 0)
-                                ? 'bg-emerald-900/40 text-emerald-400'
-                                : 'bg-red-900/40 text-red-400'
+                            ? 'bg-emerald-900/40 text-emerald-400'
+                            : 'bg-red-900/40 text-red-400'
                             }`}>
                             {trend > 0 ? '↑' : '↓'} {Math.abs(trend)}%
                         </span>

@@ -373,6 +373,69 @@ const STATIC_TREATMENTS: Omit<TreatmentEntry, 'id'>[] = [
         lastReviewDate: new Date().toISOString().split('T')[0],
         status: 'ACTIVE',
     },
+    {
+        name: 'Communication WhatsApp — Messagerie et automatisations',
+        description: 'Envoi de messages WhatsApp (transactionnels et marketing) aux apprenants et prospects via l\'API Meta Cloud ou Twilio. Inclut les messages automatiques (rappels, confirmations, relances) et les campagnes de broadcast.',
+        purpose: [
+            'Communication transactionnelle avec les apprenants (rappels session, confirmations)',
+            'Communication marketing avec les prospects (relances, offres)',
+            'Automatisations sur événements (changement statut dossier, création lead)',
+            'Campagnes de diffusion groupée (broadcasts)',
+            'Chatbot conversationnel pour l\'accueil et la qualification',
+        ],
+        legalBasis: 'Consentement (Art. 6.1.a) / Exécution du contrat (Art. 6.1.b)',
+        legalBasisDetail: 'Base légale double : le consentement explicite du prospect (Art. 6.1.a) pour les messages marketing, et l\'exécution du contrat de formation (Art. 6.1.b) pour les messages transactionnels liés à un dossier.',
+        dataCategories: [
+            {
+                category: 'Coordonnées',
+                fields: ['Numéro de téléphone (WhatsApp)'],
+                sensitivity: 'STANDARD',
+            },
+            {
+                category: 'Contenu des échanges',
+                fields: ['Contenu des messages envoyés', 'Contenu des messages reçus', 'Horodatage'],
+                sensitivity: 'STANDARD',
+            },
+            {
+                category: 'Données techniques',
+                fields: ['ID message fournisseur', 'Statut de livraison', 'Canal (WhatsApp/SMS)', 'Template utilisé'],
+                sensitivity: 'STANDARD',
+            },
+            {
+                category: 'Données de consentement',
+                fields: ['Statut opt-in/opt-out', 'Date de désinscription', 'Méthode (STOP keyword)'],
+                sensitivity: 'STANDARD',
+            },
+        ],
+        dataConcernedPersons: ['Apprenants / Stagiaires', 'Prospects / Candidats à la formation'],
+        recipients: [
+            { name: 'Équipe commerciale (interne)', type: 'INTERNAL', dpaStatus: 'NOT_REQUIRED', country: 'France' },
+            { name: 'Personnel administratif (interne)', type: 'INTERNAL', dpaStatus: 'NOT_REQUIRED', country: 'France' },
+            { name: 'Meta Platforms Inc. (WhatsApp Business API)', type: 'SUBPROCESSOR', dpaStatus: 'SIGNED', country: 'États-Unis' },
+        ],
+        retentionPeriod: '36 mois après le dernier échange',
+        retentionDetail: 'Les messages sont conservés 36 mois conformément à la politique de rétention des données. En cas d\'effacement (Art. 17), les contenus des messages sont anonymisés. L\'opt-out via mot-clé STOP est traité automatiquement.',
+        securityMeasures: [
+            'Vérification du consentement avant chaque envoi marketing (Art. 6.1.a)',
+            'Mécanisme de désinscription automatique (mot-clé STOP — Art. 7.3)',
+            'Audit trail de chaque message envoyé (AuditLog)',
+            'Chiffrement de bout en bout (WhatsApp natif)',
+            'Chiffrement en transit via TLS 1.3',
+            'Anonymisation des messages lors de l\'effacement RGPD (Art. 17)',
+            'Inclusion des messages dans l\'export de données (Art. 20)',
+            'Contrôle d\'accès RBAC sur la configuration des automatisations',
+        ],
+        transfersOutsideEU: [
+            {
+                country: 'États-Unis',
+                mechanism: 'Clauses Contractuelles Types (SCC) — Decision 2021/914/EU + DPA Meta',
+                recipient: 'Meta Platforms Inc.',
+            },
+        ],
+        dpia: { required: true, completed: false },
+        lastReviewDate: new Date().toISOString().split('T')[0],
+        status: 'ACTIVE',
+    },
 ];
 
 // ─── Génération dynamique du registre ─────────────────────────

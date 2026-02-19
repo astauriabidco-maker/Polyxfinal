@@ -433,7 +433,7 @@ export async function getQualificationStats(organizationId: string): Promise<Qua
         include: { qualification: true },
     });
 
-    const qualifications = partners.map(p => {
+    const qualifications: QualificationResult[] = partners.map((p: any) => {
         const result = computeQualificationScore(p, p.qualification);
         result.partnerId = p.id;
         return result;
@@ -468,7 +468,7 @@ export async function getQualificationStats(organizationId: string): Promise<Qua
 
     // Revues à venir (30 jours)
     const in30Days = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
-    const reviewsDueSoon = partners.filter(p =>
+    const reviewsDueSoon = partners.filter((p: any) =>
         p.qualification?.nextReviewAt && new Date(p.qualification.nextReviewAt) <= in30Days,
     ).length;
 

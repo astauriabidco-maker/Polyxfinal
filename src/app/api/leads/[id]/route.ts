@@ -9,6 +9,8 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { logLeadAction } from '@/lib/prospection/lead-audit';
+import { notifyLeadQualified, notifyLeadConverted } from '@/lib/messaging/notification-hooks';
 
 interface RouteParams {
     params: { id: string };
@@ -45,7 +47,7 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
         if (body.assignedToId !== undefined) data.assignedToId = body.assignedToId;
 
         // Si converti, enregistrer la date
-        if (body.status === 'CONVERTED') {
+        if (body.status === 'CONVERTI') {
             data.convertedAt = new Date();
             if (body.dossierId) data.convertedDossierId = body.dossierId;
         }
@@ -54,6 +56,37 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
             where: { id: leadId },
             data,
         });
+
+        // AUDIT LOG
+        let actionDetails = [];
+        if (body.status) actionDetails.push(`Statut: ${existingLead.status} -> ${body.status}`);
+        if (body.assignedToId) actionDetails.push(`Assignation modifiée`);
+        if (body.score) actionDetails.push(`Score mis à jour`);
+
+        if (actionDetails.length > 0) {
+            await logLeadAction(
+                leadId,
+                organizationId,
+                session.user.id,
+                'ADMIN', // Placeholder
+                'UPDATE',
+                actionDetails.join(', '),
+                { previousState: existingLead, newState: lead }
+            );
+        }
+
+        // Hook WhatsApp: Lead qualifié ou converti (async, non-blocking)
+        if (body.status) {
+            const qualifyStatuses = ['RDV_PLANIFIE', 'QUALIFIE', 'NEGOCIATION'];
+            if (qualifyStatuses.includes(body.status)) {
+                notifyLeadQualified(organizationId, lead, body.status)
+                    .catch(err => console.error('[Hook] Lead qualified notification failed:', err));
+            }
+            if (body.status === 'CONVERTI') {
+                notifyLeadConverted(organizationId, lead)
+                    .catch(err => console.error('[Hook] Lead converted notification failed:', err));
+            }
+        }
 
         return NextResponse.json({ success: true, lead });
     } catch (error) {
@@ -96,7 +129,7 @@ export async function DELETE(request: NextRequest, { params }: RouteParams) {
                 ville: null,
                 message: null,
                 metadata: Prisma.DbNull,
-                status: 'ARCHIVED',
+                status: 'PERDU',
             },
         });
 

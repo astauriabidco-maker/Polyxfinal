@@ -90,7 +90,7 @@ async function testConversion() {
             data: {
                 userId: user.id,
                 organizationId: newOrg.id,
-                role: { connect: { id: ROLE_IDS.ADMIN } },
+                roleId: ROLE_IDS.ADMIN,
                 scope: MembershipScope.GLOBAL,
                 isActive: true,
             }
@@ -103,7 +103,7 @@ async function testConversion() {
                 data: {
                     userId: superUser.id,
                     organizationId: newOrg.id,
-                    role: { connect: { id: ROLE_IDS.ADMIN } },
+                    roleId: ROLE_IDS.ADMIN,
                     scope: MembershipScope.GLOBAL,
                     isActive: true,
                 }

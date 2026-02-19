@@ -17,6 +17,7 @@
 
 import { prisma as defaultPrisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
+import { anonymizeLeadMessages, exportLeadMessages } from '@/lib/messaging/messaging-compliance';
 
 // Instance injectable (pour les tests)
 let prismaInstance: any = null;
@@ -87,6 +88,16 @@ export interface LeadExportData {
         legalBasis: string;
         createdAt: Date;
     } | null;
+    messages?: {
+        id: string;
+        direction: string;
+        channel: string;
+        content: string;
+        phone: string;
+        status: string;
+        templateKey: string | null;
+        createdAt: Date;
+    }[];
 }
 
 // ─── Anonymisation automatique ────────────────────────────────
@@ -146,7 +157,7 @@ export async function anonymizeExpiredLeads(
         const batch = expiredLeads.slice(i, i + batchSize);
 
         try {
-            await getPrisma().$transaction(async (tx) => {
+            await getPrisma().$transaction(async (tx: any) => {
                 for (const lead of batch) {
                     // Anonymiser le lead
                     await tx.lead.update({
@@ -216,7 +227,7 @@ export async function anonymizeLead(
             return { success: false, error: 'Lead déjà anonymisé' };
         }
 
-        await getPrisma().$transaction(async (tx) => {
+        await getPrisma().$transaction(async (tx: any) => {
             await tx.lead.update({
                 where: { id: leadId },
                 data: ANONYMIZED_VALUES,
@@ -236,6 +247,12 @@ export async function anonymizeLead(
                 });
             }
         });
+
+        // Also anonymize WhatsApp messages (Art. 17)
+        const anonymizedCount = await anonymizeLeadMessages(leadId);
+        if (anonymizedCount > 0) {
+            console.log(`[DataRetention] 📨 ${anonymizedCount} messages WhatsApp anonymisés pour lead ${leadId}`);
+        }
 
         console.log(`[DataRetention] 🗑️ Lead ${leadId} anonymisé — Motif: ${reason}`);
         return { success: true };
@@ -321,6 +338,8 @@ export async function exportLeadData(leadId: string): Promise<LeadExportData | n
             legalBasis: lead.leadConsent.legalBasis,
             createdAt: lead.leadConsent.createdAt,
         } : null,
+        // Include WhatsApp messages for portability (Art. 20)
+        messages: await exportLeadMessages(leadId),
     };
 }
 

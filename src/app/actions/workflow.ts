@@ -12,11 +12,12 @@
 'use server';
 
 import { revalidatePath } from 'next/cache';
-import { PhaseStatus, Role } from '@prisma/client';
+import { PhaseStatus } from '@prisma/client';
 import { prisma } from '@/lib/prisma';
 import { validateStateChange } from '@/lib/compliance/engine';
 import { auth } from '@/auth';
 import { canPerformAction } from '@/lib/auth/types';
+import { notifyDossierStatusChange } from '@/lib/messaging/notification-hooks';
 
 // Mapping des transitions valides
 const NEXT_STATUS_MAP: Record<string, PhaseStatus> = {
@@ -62,9 +63,8 @@ export async function promoteDossier(
         throw new Error('Non authentifié. Veuillez vous connecter.');
     }
 
-    const { id: userId, role: userRoleRaw, nom, prenom } = session.user;
-    // role is now a Role model object with {id, code, name, ...}, not a string enum
-    const userRole = typeof userRoleRaw === 'string' ? userRoleRaw : userRoleRaw?.code || 'UNKNOWN';
+    const { id: userId, role: userRole, nom, prenom } = session.user;
+    const userRoleCode = typeof userRole === 'string' ? userRole : userRole?.code || 'UNKNOWN';
     const now = new Date();
 
     // ========================================
@@ -91,10 +91,10 @@ export async function promoteDossier(
     // ========================================
     const requiredAction = TRANSITION_ACTION_MAP[nextStatus] || 'VIEW';
 
-    if (!canPerformAction(userRole as Role, requiredAction)) {
-        console.log(`[RBAC] ACCÈS REFUSÉ: ${userRole} ne peut pas effectuer ${requiredAction}`);
+    if (!canPerformAction(userRole, requiredAction)) {
+        console.log(`[RBAC] ACCÈS REFUSÉ: ${userRoleCode} ne peut pas effectuer ${requiredAction}`);
         throw new Error(
-            `Accès refusé. Le rôle ${userRole} n'est pas autorisé à effectuer cette action.`
+            `Accès refusé. Le rôle ${userRoleCode} n'est pas autorisé à effectuer cette action.`
         );
     }
 
@@ -131,7 +131,7 @@ export async function promoteDossier(
             entityId: dossierId,
             action: 'STATUS_CHANGE',
             userId: userId,
-            userRole: userRole,
+            userRole: userRoleCode,
             niveauAction: 'VALIDATION',
             newState: {
                 from: currentStatus,
@@ -144,10 +144,16 @@ export async function promoteDossier(
         },
     });
 
-    console.log(`[Audit] ${prenom} ${nom} (${userRole}): Dossier ${dossierId} ${currentStatus} → ${nextStatus}`);
+    console.log(`[Audit] ${prenom} ${nom} (${userRoleCode}): Dossier ${dossierId} ${currentStatus} → ${nextStatus}`);
 
     // ========================================
-    // 7. REVALIDATION DU CACHE
+    // 7. HOOK WHATSAPP (async, non-blocking)
+    // ========================================
+    notifyDossierStatusChange(dossier.organizationId, dossierId, currentStatus, nextStatus)
+        .catch(err => console.error('[Hook] Dossier status change notification failed:', err));
+
+    // ========================================
+    // 8. REVALIDATION DU CACHE
     // ========================================
     revalidatePath('/dashboard');
 

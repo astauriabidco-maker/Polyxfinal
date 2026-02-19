@@ -161,8 +161,8 @@ export async function GET(req: NextRequest) {
         // ────────────────────────────────────────────────────────
         // 2. KPIs globaux
         // ────────────────────────────────────────────────────────
-        const convertedLeads = leads.filter(l => l.status === 'CONVERTED').length;
-        const rejectedLeads = leads.filter(l => l.status === 'LOST').length;
+        const convertedLeads = leads.filter(l => l.status === 'CONVERTI').length;
+        const rejectedLeads = leads.filter(l => l.status === 'PERDU').length;
         const scoredLeads = leads.filter(l => l.score !== null);
         const avgScore = scoredLeads.length > 0
             ? Math.round(scoredLeads.reduce((sum, l) => sum + (l.score || 0), 0) / scoredLeads.length)
@@ -262,8 +262,8 @@ export async function GET(req: NextRequest) {
 
         const partners: PartnerMetrics[] = Array.from(partnerMap.entries()).map(([partnerId, data]) => {
             const pLeads = data.leads;
-            const pConverted = pLeads.filter(l => l.status === 'CONVERTED').length;
-            const pRejected = pLeads.filter(l => l.status === 'LOST').length;
+            const pConverted = pLeads.filter(l => l.status === 'CONVERTI').length;
+            const pRejected = pLeads.filter(l => l.status === 'PERDU').length;
             const pScored = pLeads.filter(l => l.score !== null);
             const pAvgScore = pScored.length > 0
                 ? Math.round(pScored.reduce((sum, l) => sum + (l.score || 0), 0) / pScored.length)

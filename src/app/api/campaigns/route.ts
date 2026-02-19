@@ -39,9 +39,9 @@ export async function GET(request: NextRequest) {
             return {
                 ...c,
                 leadsCount: c._count.leads,
-                leadsConverted: statusCounts.find(s => s.status === 'CONVERTED')?._count || 0,
+                leadsConverted: statusCounts.find(s => s.status === 'CONVERTI')?._count || 0,
                 conversionRate: c._count.leads > 0
-                    ? Math.round((statusCounts.find(s => s.status === 'CONVERTED')?._count || 0) / c._count.leads * 100)
+                    ? Math.round((statusCounts.find(s => s.status === 'CONVERTI')?._count || 0) / c._count.leads * 100)
                     : 0,
             };
         }));

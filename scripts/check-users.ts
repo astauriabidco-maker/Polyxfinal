@@ -8,7 +8,7 @@ async function main() {
     const users = await prisma.user.findMany({
         include: {
             memberships: {
-                include: { organization: true }
+                include: { organization: true, role: true }
             }
         }
     });
@@ -17,7 +17,7 @@ async function main() {
     for (const user of users) {
         console.log(`- ${user.email} (Name: ${user.prenom} ${user.nom})`);
         user.memberships.forEach(m => {
-            console.log(`  🏢 Org: ${m.organization.name} - Role: ${m.role} - Scope: ${m.scope}`);
+            console.log(`  🏢 Org: ${m.organization.name} - Role: ${m.role.name} - Scope: ${m.scope}`);
         });
         console.log(`  Has password: ${user.passwordHash ? 'YES' : 'NO'}`);
 

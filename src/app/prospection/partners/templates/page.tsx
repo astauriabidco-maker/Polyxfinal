@@ -243,8 +243,8 @@ export default function DocumentTemplatesPage() {
                         <button
                             onClick={() => setShowVariables(!showVariables)}
                             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${showVariables
-                                    ? 'bg-purple-600 text-white'
-                                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                                ? 'bg-purple-600 text-white'
+                                : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
                                 }`}
                         >
                             <span>{showVariables ? '✕' : '{' + '}'}</span>
@@ -253,8 +253,8 @@ export default function DocumentTemplatesPage() {
                         <button
                             onClick={() => setShowHistory(!showHistory)}
                             className={`px-4 py-2 rounded-xl text-sm font-medium transition-all flex items-center gap-2 ${showHistory
-                                    ? 'bg-blue-600 text-white'
-                                    : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
+                                ? 'bg-blue-600 text-white'
+                                : 'bg-slate-800 text-slate-300 hover:bg-slate-700 border border-slate-700'
                                 }`}
                         >
                             🕒 Historique
@@ -284,8 +284,8 @@ export default function DocumentTemplatesPage() {
                                 key={type}
                                 onClick={() => setSelectedType(type)}
                                 className={`flex-1 p-4 rounded-2xl border-2 transition-all duration-200 text-left ${selectedType === type
-                                        ? 'border-purple-500 bg-purple-500/10'
-                                        : 'border-slate-700 bg-slate-900/50 hover:border-slate-600'
+                                    ? 'border-purple-500 bg-purple-500/10'
+                                    : 'border-slate-700 bg-slate-900/50 hover:border-slate-600'
                                     }`}
                             >
                                 <div className="flex items-center gap-3">
@@ -331,8 +331,8 @@ export default function DocumentTemplatesPage() {
                                 <div
                                     key={index}
                                     className={`bg-slate-900/50 border rounded-2xl transition-all duration-200 ${expandedSection === index
-                                            ? 'border-purple-500/50 shadow-lg shadow-purple-500/5'
-                                            : 'border-slate-800 hover:border-slate-700'
+                                        ? 'border-purple-500/50 shadow-lg shadow-purple-500/5'
+                                        : 'border-slate-800 hover:border-slate-700'
                                         }`}
                                 >
                                     {/* Section Header */}
@@ -425,7 +425,7 @@ export default function DocumentTemplatesPage() {
                                                     {/* Variable highlights */}
                                                     {section.content.match(/\{\{[^}]+\}\}/g) && (
                                                         <div className="flex flex-wrap gap-1.5 mt-2">
-                                                            {[...new Set(section.content.match(/\{\{[^}]+\}\}/g))].map(v => (
+                                                            {Array.from(new Set(section.content.match(/\{\{[^}]+\}\}/g))).map(v => (
                                                                 <span
                                                                     key={v}
                                                                     className="text-xs px-2 py-0.5 rounded-full bg-purple-500/10 text-purple-400 border border-purple-500/20"
@@ -557,8 +557,8 @@ export default function DocumentTemplatesPage() {
                                                         key={key}
                                                         onClick={() => handleCopyVariable(key)}
                                                         className={`w-full text-left px-3 py-2 rounded-lg text-sm transition-all group ${copiedVar === key
-                                                                ? 'bg-emerald-500/10 border border-emerald-500/30'
-                                                                : 'hover:bg-slate-800 border border-transparent'
+                                                            ? 'bg-emerald-500/10 border border-emerald-500/30'
+                                                            : 'hover:bg-slate-800 border border-transparent'
                                                             }`}
                                                     >
                                                         <div className="flex items-center justify-between gap-2">
@@ -608,8 +608,8 @@ export default function DocumentTemplatesPage() {
                                                 <div
                                                     key={t.id}
                                                     className={`p-3 rounded-xl border transition-all ${t.isActive
-                                                            ? 'bg-purple-500/10 border-purple-500/30'
-                                                            : 'bg-slate-800/50 border-slate-700 hover:border-slate-600'
+                                                        ? 'bg-purple-500/10 border-purple-500/30'
+                                                        : 'bg-slate-800/50 border-slate-700 hover:border-slate-600'
                                                         }`}
                                                 >
                                                     <div className="flex items-center justify-between mb-1">

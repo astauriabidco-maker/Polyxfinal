@@ -38,6 +38,12 @@ const PROTECTED_ROUTES: Record<string, SystemRoleCode[]> = {
     // Prospection - ADMIN + RESP_ADMIN can manage leads
     '/prospection': ['ADMIN', 'RESP_ADMIN', 'RESP_PEDAGO'],
     '/prospection/partners': ['ADMIN'],
+
+    // Messagerie inbox
+    '/messaging': ['ADMIN', 'RESP_ADMIN', 'RESP_PEDAGO'],
+
+    // Settings - ADMIN only
+    '/settings/messaging': ['ADMIN'],
 };
 
 // Routes publiques (pas d'auth requise)

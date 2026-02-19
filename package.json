@@ -22,16 +22,25 @@
         "seed": "tsx prisma/seed.ts"
     },
     "dependencies": {
+        "@ai-sdk/anthropic": "^3.0.45",
+        "@ai-sdk/mistral": "^3.0.20",
+        "@ai-sdk/openai": "^3.0.30",
+        "@hookform/resolvers": "^5.2.2",
         "@prisma/client": "^5.22.0",
-        "@react-pdf/renderer": "^4.1.5",
+        "@react-pdf/renderer": "^4.3.2",
         "@types/bcryptjs": "^2.4.6",
+        "ai": "^6.0.92",
         "bcryptjs": "^3.0.3",
         "date-fns": "^4.1.0",
         "framer-motion": "^12.34.0",
+        "lucide-react": "^0.574.0",
         "next": "14.2.20",
         "next-auth": "^5.0.0-beta.25",
+        "openai": "^6.22.0",
         "react": "^18.3.1",
         "react-dom": "^18.3.1",
+        "react-hook-form": "^7.71.1",
+        "sonner": "^2.0.7",
         "zod": "^3.23.8"
     },
     "devDependencies": {

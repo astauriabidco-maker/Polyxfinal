@@ -11,6 +11,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import crypto from 'crypto';
+import { autoDispatchLead } from '@/lib/prospection/lead-dispatch';
 
 // Rate limiter en mémoire (simple)
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
@@ -60,7 +61,7 @@ export async function POST(request: NextRequest) {
         }
 
         // Rate limiting
-        if (!checkRateLimit(partner.apiKeyPrefix, partner.rateLimit)) {
+        if (!checkRateLimit(partner.apiKeyPrefix || partner.id, partner.rateLimit)) {
             return NextResponse.json(
                 { error: 'Rate limit dépassé. Réessayez dans 1 minute.', code: 'RATE_LIMITED' },
                 { status: 429, headers: { 'Retry-After': '60' } }
@@ -125,6 +126,9 @@ export async function POST(request: NextRequest) {
             },
         });
 
+        // Auto-dispatch basé sur le code postal
+        await autoDispatchLead(lead.id, partner.organizationId, codePostal);
+
         // Incrémenter le compteur
         await prisma.partner.update({
             where: { id: partner.id },
@@ -160,7 +164,7 @@ export async function GET(request: NextRequest) {
             );
         }
 
-        if (!checkRateLimit(partner.apiKeyPrefix, partner.rateLimit)) {
+        if (!checkRateLimit(partner.apiKeyPrefix || partner.id, partner.rateLimit)) {
             return NextResponse.json(
                 { error: 'Rate limit dépassé', code: 'RATE_LIMITED' },
                 { status: 429, headers: { 'Retry-After': '60' } }

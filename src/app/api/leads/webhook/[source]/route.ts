@@ -11,6 +11,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { prisma } from '@/lib/prisma';
 import { LeadSource } from '@prisma/client';
 import crypto from 'crypto';
+import { autoDispatchLead } from '@/lib/prospection/lead-dispatch';
 
 interface RouteParams {
     params: { source: string };
@@ -218,6 +219,9 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
                 userAgent: request.headers.get('user-agent') || null,
             },
         });
+
+        // Auto-dispatch basé sur le code postal
+        await autoDispatchLead(lead.id, organizationId, leadData.codePostal);
 
         return NextResponse.json({ success: true, leadId: lead.id }, { status: 201 });
     } catch (error) {

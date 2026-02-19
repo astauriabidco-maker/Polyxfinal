@@ -7,6 +7,15 @@
 import { auth } from '@/auth';
 import { redirect } from 'next/navigation';
 import { prisma } from '@/lib/prisma';
+import { LeadStatus } from '@prisma/client';
+
+const PIPELINE_STATUSES = [
+    LeadStatus.NEW,
+    LeadStatus.DISPATCHED,
+    LeadStatus.A_RAPPELER,
+    LeadStatus.NE_REPONDS_PAS,
+    LeadStatus.PAS_INTERESSE,
+];
 import DashboardLayout from '@/components/layout/DashboardLayout';
 import LeadPipeline from '@/components/prospection/LeadPipeline';
 
@@ -36,10 +45,12 @@ export default async function ProspectionPage() {
 
     // Récupérer les leads
     const leads = await prisma.lead.findMany({
-        where: { organizationId },
+        where: { organizationId, status: { in: PIPELINE_STATUSES } },
         include: {
             campaign: { select: { id: true, name: true, source: true } },
             partner: { select: { id: true, companyName: true } },
+            site: { select: { id: true, name: true } },
+            assignedTo: { select: { id: true, nom: true, prenom: true } },
             leadConsent: { select: { consentGiven: true, legalBasis: true, anonymizedAt: true } },
         },
         orderBy: { createdAt: 'desc' },
@@ -49,13 +60,13 @@ export default async function ProspectionPage() {
     // Stats
     const statusStats = await prisma.lead.groupBy({
         by: ['status'],
-        where: { organizationId },
+        where: { organizationId, status: { in: PIPELINE_STATUSES } },
         _count: true,
     });
 
     const sourceStats = await prisma.lead.groupBy({
         by: ['source'],
-        where: { organizationId },
+        where: { organizationId, status: { in: PIPELINE_STATUSES } },
         _count: true,
     });
 
@@ -73,21 +84,39 @@ export default async function ProspectionPage() {
         bySource: sourceStats.reduce((acc, s) => ({ ...acc, [s.source]: s._count }), {} as Record<string, number>),
     };
 
+    // Sites & commerciaux pour le formulaire de création
+    const [sites, commercials, scripts] = await Promise.all([
+        prisma.site.findMany({ where: { organizationId, isActive: true }, select: { id: true, name: true }, orderBy: { name: 'asc' } }),
+        prisma.user.findMany({
+            where: { memberships: { some: { organizationId } } },
+            select: { id: true, nom: true, prenom: true },
+            orderBy: { nom: 'asc' },
+        }),
+        prisma.prequalScript.findMany({
+            where: { organizationId, isActive: true },
+            select: { id: true, question: true, ordre: true },
+            orderBy: { ordre: 'asc' },
+        }),
+    ]);
+
     const serializedLeads = leads.map(l => ({
         id: l.id,
         email: l.email,
         nom: l.nom,
         prenom: l.prenom,
         telephone: l.telephone,
+        adresse: l.adresse,
+        codePostal: l.codePostal,
+        ville: l.ville,
         source: l.source,
         status: l.status,
         score: l.score,
         notes: l.notes,
         formationSouhaitee: l.formationSouhaitee,
-        codePostal: l.codePostal,
-        ville: l.ville,
         campaign: l.campaign,
         partner: l.partner,
+        site: l.site,
+        assignedTo: l.assignedTo,
         consent: l.leadConsent ? {
             consentGiven: l.leadConsent.consentGiven,
             legalBasis: l.leadConsent.legalBasis,
@@ -127,6 +156,9 @@ export default async function ProspectionPage() {
                     leads={serializedLeads}
                     stats={stats}
                     isAdmin={isAdmin}
+                    sites={sites}
+                    commercials={commercials}
+                    scripts={scripts}
                 />
             </div>
         </DashboardLayout>

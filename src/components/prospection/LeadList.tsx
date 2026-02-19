@@ -9,6 +9,7 @@ import { fr } from 'date-fns/locale';
 interface LeadWithRelations extends Lead {
     campaign?: Pick<Campaign, 'name' | 'id' | 'source'> | null;
     site?: { name: string } | null;
+    assignedTo?: { id: string; nom: string; prenom: string } | null;
 }
 
 interface LeadListProps {
@@ -17,21 +18,28 @@ interface LeadListProps {
 }
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; icon: string }> = {
-    'DISPATCHED': { label: 'A traiter', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30', icon: '✨' },
-    'ATTEMPTED': { label: 'Rappeler', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: '📞' },
-    'RDV_SCHEDULED': { label: 'RDV Planifié', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: '📅' },
-    'NURTURING': { label: 'A mûrir', color: 'bg-teal-500/20 text-teal-400 border-teal-500/30', icon: '🌱' },
-    'QUALIFIED': { label: 'Qualifié', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30', icon: '⭐' },
-    'NOT_ELIGIBLE': { label: 'Non éligible', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: '❌' },
+    'NEW': { label: 'Nouveau', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: '🆕' },
+    'DISPATCHED': { label: 'Nouveau', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30', icon: '🆕' },
+    'A_RAPPELER': { label: 'A rappeler', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30', icon: '📞' },
+    'NE_REPONDS_PAS': { label: 'Ne réponds pas', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30', icon: '📵' },
+    'PAS_INTERESSE': { label: 'Pas intéressé', color: 'bg-red-500/20 text-red-400 border-red-500/30', icon: '🚫' },
 };
 
 export default function LeadList({ initialLeads, sites = [] }: LeadListProps) {
     const [selectedLead, setSelectedLead] = useState<LeadWithRelations | null>(null);
-    const [filterStatus, setFilterStatus] = useState<LeadStatus | 'ALL'>('DISPATCHED');
+    const [filterStatus, setFilterStatus] = useState<LeadStatus | 'ALL' | 'NOUVEAU'>('NOUVEAU');
     const [filterSiteId, setFilterSiteId] = useState<string>('ALL');
 
     const filteredLeads = initialLeads.filter(lead => {
-        const statusMatch = filterStatus === 'ALL' ? true : lead.status === filterStatus;
+        let statusMatch = true;
+        if (filterStatus === 'ALL') {
+            statusMatch = true;
+        } else if (filterStatus === 'NOUVEAU') {
+            statusMatch = lead.status === 'NEW' || lead.status === 'DISPATCHED';
+        } else {
+            statusMatch = lead.status === filterStatus;
+        }
+
         const siteMatch = filterSiteId === 'ALL' ? true : lead.siteId === filterSiteId;
         return statusMatch && siteMatch;
     });
@@ -45,15 +53,13 @@ export default function LeadList({ initialLeads, sites = [] }: LeadListProps) {
                     <select
                         className="block w-full rounded-lg bg-slate-700/50 border border-slate-600 text-white text-sm px-3 py-2 focus:outline-none focus:ring-2 focus:ring-cyan-500"
                         value={filterStatus}
-                        onChange={(e) => setFilterStatus(e.target.value as LeadStatus | 'ALL')}
+                        onChange={(e) => setFilterStatus(e.target.value as LeadStatus | 'ALL' | 'NOUVEAU')}
                     >
                         <option value="ALL">Tous les statuts</option>
-                        <option value="DISPATCHED">✨ Nouveaux (A traiter)</option>
-                        <option value="ATTEMPTED">📞 Tentative (Rappeler)</option>
-                        <option value="RDV_SCHEDULED">📅 RDV Planifié</option>
-                        <option value="QUALIFIED">⭐ Qualifié</option>
-                        <option value="NURTURING">🌱 A mûrir</option>
-                        <option value="NOT_ELIGIBLE">❌ Non éligible</option>
+                        <option value="NOUVEAU">🆕 Nouveaux</option>
+                        <option value="A_RAPPELER">📞 A rappeler</option>
+                        <option value="NE_REPONDS_PAS">📵 Ne réponds pas</option>
+                        <option value="PAS_INTERESSE">🚫 Pas intéressé</option>
                     </select>
                     {sites.length > 0 && (
                         <select
@@ -138,11 +144,34 @@ export default function LeadList({ initialLeads, sites = [] }: LeadListProps) {
                                     </div>
                                     <div>
                                         <dt className="text-xs font-medium text-slate-500 uppercase">Téléphone</dt>
-                                        <dd className="mt-1 text-sm text-white">{selectedLead.telephone || '—'}</dd>
+                                        <dd className="mt-1 text-sm">
+                                            {selectedLead.telephone ? (
+                                                <a href={`tel:${selectedLead.telephone}`} className="text-cyan-400 hover:text-cyan-300 transition-colors flex items-center gap-1">
+                                                    📞 {selectedLead.telephone}
+                                                </a>
+                                            ) : (
+                                                <span className="text-white">—</span>
+                                            )}
+                                        </dd>
                                     </div>
                                     <div>
-                                        <dt className="text-xs font-medium text-slate-500 uppercase">Ville / CP</dt>
-                                        <dd className="mt-1 text-sm text-white">{selectedLead.ville || '—'} {selectedLead.codePostal ? `(${selectedLead.codePostal})` : ''}</dd>
+                                        <dt className="text-xs font-medium text-slate-500 uppercase">📍 Adresse postale</dt>
+                                        <dd className="mt-1 text-sm text-white">
+                                            {selectedLead.adresse || selectedLead.codePostal || selectedLead.ville ? (
+                                                <>
+                                                    {selectedLead.adresse && <span>{selectedLead.adresse}<br /></span>}
+                                                    {[selectedLead.codePostal, selectedLead.ville].filter(Boolean).join(' ')}
+                                                </>
+                                            ) : '—'}
+                                        </dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs font-medium text-slate-500 uppercase">🏢 Agence</dt>
+                                        <dd className="mt-1 text-sm text-white">{selectedLead.site?.name || '— Non assignée'}</dd>
+                                    </div>
+                                    <div>
+                                        <dt className="text-xs font-medium text-slate-500 uppercase">👤 Commercial</dt>
+                                        <dd className="mt-1 text-sm text-white">{selectedLead.assignedTo ? `${selectedLead.assignedTo.prenom} ${selectedLead.assignedTo.nom}` : '— Non assigné'}</dd>
                                     </div>
                                     <div>
                                         <dt className="text-xs font-medium text-slate-500 uppercase">Formation souhaitée</dt>

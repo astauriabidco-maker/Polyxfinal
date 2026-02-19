@@ -9,6 +9,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
 import { LeadSource, LeadStatus } from '@prisma/client';
+import { autoDispatchLead } from '@/lib/prospection/lead-dispatch';
+import { logLeadAction } from '@/lib/prospection/lead-audit';
+import { notifyLeadCreated } from '@/lib/messaging/notification-hooks';
 
 /**
  * GET /api/leads
@@ -84,6 +87,7 @@ export async function GET(request: NextRequest) {
  * POST /api/leads
  * Créer un lead manuellement
  */
+// POST /api/leads - Créer un lead manuellement
 export async function POST(request: NextRequest) {
     try {
         const session = await auth();
@@ -93,7 +97,7 @@ export async function POST(request: NextRequest) {
 
         const organizationId = session.user.organizationId;
         const body = await request.json();
-        const { email, nom, prenom, telephone, formationSouhaitee, message, codePostal, ville, source, campaignId, score, consentGiven } = body;
+        const { email, nom, prenom, telephone, adresse, formationSouhaitee, message, codePostal, ville, source, campaignId, score, consentGiven, siteId, assignedToId } = body;
 
         if (!email || !nom || !prenom) {
             return NextResponse.json({ error: 'Email, nom et prénom requis' }, { status: 400 });
@@ -106,6 +110,7 @@ export async function POST(request: NextRequest) {
                 nom,
                 prenom,
                 telephone,
+                adresse,
                 formationSouhaitee,
                 message,
                 codePostal,
@@ -113,8 +118,32 @@ export async function POST(request: NextRequest) {
                 source: source || 'MANUAL',
                 campaignId,
                 score,
+                ...(siteId && { siteId }),
+                ...(assignedToId && { assignedToId }),
             },
         });
+
+        // AUDIT LOG: CRÉATION
+        await logLeadAction(
+            lead.id,
+            organizationId,
+            session.user.id,
+            'ADMIN', // TODO: Get real role from session if available, or fetch membership
+            'CREATE',
+            `Lead créé manuellement (Source: ${source || 'MANUAL'})`,
+            { newState: lead }
+        );
+
+        // Auto-dispatch basé sur le code postal (sauf si agence déjà choisie)
+        if (!siteId) {
+            await autoDispatchLead(
+                lead.id,
+                organizationId,
+                codePostal,
+                session.user.id, // Pass performer ID
+                'ADMIN'
+            );
+        }
 
         // Créer le consentement — reflet fidèle de ce qui a été recueilli
         await prisma.leadConsent.create({
@@ -128,6 +157,10 @@ export async function POST(request: NextRequest) {
                 legalBasis: consentGiven ? 'consent' : 'legitimate_interest',
             },
         });
+
+        // Hook WhatsApp: Nouveau lead créé (async, non-blocking)
+        notifyLeadCreated(organizationId, lead)
+            .catch(err => console.error('[Hook] Lead created notification failed:', err));
 
         return NextResponse.json({ success: true, lead }, { status: 201 });
     } catch (error) {

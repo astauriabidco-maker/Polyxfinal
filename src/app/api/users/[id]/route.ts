@@ -9,7 +9,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { auth } from '@/auth';
 import { prisma } from '@/lib/prisma';
-import { Role, MembershipScope } from '@prisma/client';
+import { MembershipScope } from '@prisma/client';
 
 interface RouteParams {
     params: Promise<{ id: string }>;
@@ -37,6 +37,7 @@ export async function GET(request: NextRequest, { params }: RouteParams) {
             },
             include: {
                 user: true,
+                role: true,
                 siteAccess: {
                     include: {
                         site: true,

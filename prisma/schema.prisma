@@ -51,7 +51,19 @@ model Organization {
   sites                 Site[]
   territories           Territory[]
   roles                 Role[]
-
+  zoneMappings          ZoneMapping[]
+  prequalScripts        PrequalScript[]
+  messagingConfig       MessagingConfig?
+  messages              Message[]
+  automations           MessageAutomation[]
+  scheduledMessages     ScheduledMessage[]
+  sequences             MessageSequence[]
+  broadcasts            Broadcast[]
+  contactTags           ContactTag[]
+  chatbotRules          ChatbotRule[]
+  interactiveActions    InteractiveAction[]
+  aiSettings            AISettings?
+  
   @@index([siret])
   @@index([type])
   @@index([isActive])
@@ -78,6 +90,7 @@ model Site {
   sessions             Session[]
   organization         Organization           @relation(fields: [organizationId], references: [id])
   leads                Lead[]
+  zoneMappings         ZoneMapping[]
 
   @@unique([organizationId, name])
   @@index([organizationId])
@@ -126,6 +139,9 @@ model User {
   sessionsFormateur Session[]     @relation("SessionFormateur")
   validationsGiven  Validation[]
   preuvesGenerated  Preuve[]      @relation("PreuveGenerePar")
+  assignedLeads     Lead[]        @relation("LeadAssignedTo")
+  callLogs          CallLog[]
+  messagesSent      Message[]     @relation("MessageSentBy")
 
   @@index([email])
 }
@@ -184,36 +200,50 @@ model Certification {
 
 /// Programme de formation (Versionné)
 model Programme {
-  id               String              @id @default(cuid())
-  reference        String
-  intitule         String
-  objectifs        String
-  prerequis        String
-  contenu          String
-  modalitesEval    String
-  moyensPedago     String
-  accessibilitePSH String?
-  dureeHeures      Int
-  modalite         Modalite            @default(PRESENTIEL)
-  tarifHT          Decimal             @db.Decimal(10, 2)
-  tarifTTC         Decimal             @db.Decimal(10, 2)
-  certificationId  String?
-  version          Int                 @default(1)
-  isPublished      Boolean             @default(false)
-  publishedAt      DateTime?
-  status           PhaseStatus         @default(BROUILLON)
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
-  organizationId   String
-  preuves          Preuve[]
-  certification    Certification?      @relation(fields: [certificationId], references: [id])
-  organization     Organization        @relation(fields: [organizationId], references: [id])
-  snapshots        ProgrammeSnapshot[]
-  sessions         Session[]
+  id                 String              @id @default(cuid())
+  reference          String
+  title              String              @map("intitule") // Mapped to existing column to preserve data
+  publicCible        String?             @db.Text
+  prerequis          String              @db.Text
+  objectifs          String[]            // Changed from String to String[] for granular objectives
+  contenu            Json?               // Changed from String to Json for structured content
+  modalitesEval      String?             // Made optional as we might move to structured data
+  moyensPedago       String?
+  accessibilitePSH   String?
+  dureeHeures        Int
+  dureeJours         Float               @default(0)
+  modalite           Modalite            @default(PRESENTIEL)
+  tarifHT            Decimal?            @db.Decimal(10, 2) // Kept for backward compatibility
+  tarifTTC           Decimal?            @db.Decimal(10, 2) // Kept for backward compatibility
+  tarifInter         Float?
+  tarifIntra         Float?
+  
+  // Franchise & Network Logic
+  isTemplate         Boolean             @default(false)
+  originalTemplateId String?
+  originalTemplate   Programme?          @relation("ProgramInheritance", fields: [originalTemplateId], references: [id])
+  copies             Programme[]         @relation("ProgramInheritance")
+
+  certificationId    String?
+  version            Int                 @default(1)
+  isPublished        Boolean             @default(false)
+  publishedAt        DateTime?
+  status             PhaseStatus         @default(BROUILLON)
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  organizationId     String
+  
+  preuves            Preuve[]
+  certification      Certification?      @relation(fields: [certificationId], references: [id])
+  organization       Organization        @relation(fields: [organizationId], references: [id])
+  snapshots          ProgrammeSnapshot[]
+  sessions           Session[]
 
   @@unique([organizationId, reference])
   @@index([organizationId])
   @@index([status, isPublished])
+  @@index([isTemplate])
+  @@index([originalTemplateId])
 }
 
 /// Snapshot immuable du programme (lié au contrat signé)
@@ -231,26 +261,27 @@ model ProgrammeSnapshot {
 }
 
 model Session {
-  id             String       @id @default(cuid())
+  id             String        @id @default(cuid())
   programmeId    String
   reference      String
   dateDebut      DateTime
   dateFin        DateTime
   lieuFormation  String?
-  placesMin      Int          @default(1)
+  placesMin      Int           @default(1)
   placesMax      Int
+  planningJson   Json?
   formateurId    String?
-  status         PhaseStatus  @default(BROUILLON)
-  createdAt      DateTime     @default(now())
-  updatedAt      DateTime     @updatedAt
+  status         SessionStatus @default(PLANIFIE)
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
   organizationId String
   siteId         String
   dossiers       Dossier[]
   emargements    Emargement[]
-  formateur      User?        @relation("SessionFormateur", fields: [formateurId], references: [id])
-  organization   Organization @relation(fields: [organizationId], references: [id])
-  programme      Programme    @relation(fields: [programmeId], references: [id])
-  site           Site         @relation(fields: [siteId], references: [id])
+  formateur      User?         @relation("SessionFormateur", fields: [formateurId], references: [id])
+  organization   Organization  @relation(fields: [organizationId], references: [id])
+  programme      Programme     @relation(fields: [programmeId], references: [id])
+  site           Site          @relation(fields: [siteId], references: [id])
 
   @@unique([organizationId, reference])
   @@index([organizationId])
@@ -258,6 +289,7 @@ model Session {
   @@index([programmeId])
   @@index([dateDebut, dateFin])
   @@index([status])
+  @@index([formateurId])
 }
 
 /// Dossier stagiaire (Inscription à une session)
@@ -315,12 +347,15 @@ model Dossier {
   emargements                Emargement[]
   evaluations                Evaluation[]
   preuves                    Preuve[]
+  messages                   Message[]
 
   @@index([organizationId])
   @@index([siteId])
   @@index([sessionId])
   @@index([companyId])
   @@index([stagiaireEmail])
+  interactiveActions             InteractiveAction[]
+
   @@index([status, phaseActuelle])
   @@index([source])
 }
@@ -685,12 +720,12 @@ model FranchiseCandidate {
 model Lead {
   id                 String       @id @default(cuid())
   organizationId     String
-  siteId             String?      // [NEW] Dispatch: Agence/Campus responsable
+  siteId             String?      // Dispatch: Agence/Campus responsable
   source             LeadSource
   sourceRef          String?
   campaignId         String?
   partnerId          String?
-  origin             String?      // [NEW] Précision sur l'origine (ex: "Salon étudiant", "Formulaire Contact")
+  origin             String?      // Précision sur l'origine (ex: "Salon étudiant", "Formulaire Contact")
   email              String
   nom                String
   prenom             String
@@ -701,7 +736,9 @@ model Lead {
   formationSouhaitee String?
   message            String?
   dateReponse        DateTime?        // Date de réponse du lead
-  dateRdv            DateTime?        // [NEW] Date du RDV physique confirmé
+  dateRdv            DateTime?        // Date du RDV physique confirmé
+  nextCallDate       DateTime?        // Date de prochain rappel
+  lostReason         String?          // Raison de perte (si PERDU)
   metadata           Json?
   status             LeadStatus   @default(NEW)
   score              Int?
@@ -711,20 +748,25 @@ model Lead {
   convertedDossierId String?
   createdAt          DateTime     @default(now())
   updatedAt          DateTime     @updatedAt
+  assignedTo         User?        @relation("LeadAssignedTo", fields: [assignedToId], references: [id])
   campaign           Campaign?    @relation(fields: [campaignId], references: [id])
   organization       Organization @relation(fields: [organizationId], references: [id])
-  site               Site?        @relation(fields: [siteId], references: [id]) // [NEW] Relation
+  site               Site?        @relation(fields: [siteId], references: [id])
   partner            Partner?     @relation(fields: [partnerId], references: [id])
   leadConsent        LeadConsent?
 
+  @@index([assignedToId])
   @@index([campaignId])
   @@index([createdAt])
   @@index([email])
   @@index([organizationId])
-  @@index([siteId]) // [NEW] Index
+  @@index([siteId])
   @@index([partnerId])
   @@index([source])
   @@index([status])
+  callLogs           CallLog[]
+  messages           Message[]
+  contactTags        ContactTag[]
 }
 
 model LeadConsent {
@@ -1048,8 +1090,9 @@ enum StatutCertification {
 /// Modalité de formation
 enum Modalite {
   PRESENTIEL
-  FOAD
-  MIXTE
+  DISTANCIEL // Was FOAD
+  BLENDED    // Was MIXTE
+  AFEST
 }
 
 /// Niveau d'action pour AuditLog
@@ -1130,18 +1173,21 @@ enum LeadSource {
 }
 
 enum LeadStatus {
-  NEW             // Nouveau, non traité
-  DISPATCHED      // [NEW] Affecté à une agence (Site)
-  ATTEMPTED       // [NEW] Tentative d'appel (NRP)
-  CONTACTED       // Contact établi
-  QUALIFIED       // Pré-qualifié (Intérêt confirmé)
-  RDV_SCHEDULED   // [NEW] RDV Physique programmé (Objectif final Prospection)
-  NEGOTIATION     // En discussion (Post-RDV)
-  CONVERTED       // Dossier créé (Gagné)
-  NOT_ELIGIBLE    // [NEW] Pas éligible / Pas intéressé (Perdu)
-  NURTURING       // [NEW] A recontacter plus tard
-  LOST            // Perdu (Plus de réponse, etc.)
-  ARCHIVED        // Archivé
+  // === PIPELINE (Prospection) ===
+  NEW                // Nouveau, non traité
+  DISPATCHED         // Affecté à une agence (auto-dispatch par CP)
+  A_RAPPELER         // A rappeler (call back)
+  NE_REPONDS_PAS     // Ne réponds pas (NRP)
+  PAS_INTERESSE      // Pas intéressé (Perdu Pipeline)
+  // === CRM (Post-RDV) ===
+  RDV_PLANIFIE       // RDV fixé, en attente
+  RDV_NON_HONORE     // RDV non honoré
+  COURRIERS_ENVOYES  // Courriers/Documents envoyés
+  COURRIERS_RECUS    // Courriers/Documents reçus
+  NEGOCIATION        // En discussion
+  CONVERTI           // Inscription validée → création Dossier
+  PROBLEMES_SAV      // Problèmes / SAV
+  PERDU              // Abandonné (avec raison)
 }
 
 enum NetworkType {
@@ -1155,4 +1201,551 @@ enum PartnerStatus {
   ACTIVE
   SUSPENDED
   TERMINATED
+}
+
+/// Zonage : mapping Code Postal (préfixe) → Site/Agence pour le dispatch automatique des leads
+model ZoneMapping {
+  id              String       @id @default(cuid())
+  organizationId  String
+  siteId          String
+  prefix          String       /// Préfixe CP : "75", "691", "13001" (longueur variable, plus long = prioritaire)
+  label           String?      /// Description optionnelle : "Île-de-France", "Lyon Centre"
+  isActive        Boolean      @default(true)
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+  site            Site         @relation(fields: [siteId], references: [id])
+
+  @@unique([organizationId, prefix])
+  @@index([organizationId, isActive])
+}
+
+/// Script de préqualification (questions admin-éditables)
+model PrequalScript {
+  id              String   @id @default(cuid())
+  organizationId  String
+  question        String
+  ordre           Int      @default(0)
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+
+  organization    Organization @relation(fields: [organizationId], references: [id])
+
+  @@unique([organizationId, ordre])
+  @@index([organizationId])
+}
+
+/// Résultat d'un appel
+enum CallOutcome {
+  INTERESSE
+  A_RAPPELER
+  NRP
+  PAS_INTERESSE
+}
+
+/// Historique d'appels (log chaque tentative)
+model CallLog {
+  id              String      @id @default(cuid())
+  leadId          String
+  callerId        String      // User qui a appelé
+  outcome         CallOutcome // INTERESSE, A_RAPPELER, NRP, PAS_INTERESSE
+  duration        Int?        // Durée en secondes
+  notes           String?
+  questionsAsked  Json?       // IDs des questions cochées
+  nextCallDate    DateTime?   // Si rappel planifié
+  createdAt       DateTime    @default(now())
+
+  lead            Lead        @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  caller          User        @relation(fields: [callerId], references: [id])
+
+  @@index([leadId])
+  @@index([callerId])
+  @@index([outcome])
+  @@index([createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MESSAGING — Multi-Tenant WhatsApp / SMS Configuration
+// ═══════════════════════════════════════════════════════════════
+
+enum MessagingProviderType {
+  META_CLOUD
+  TWILIO
+}
+
+/// Configuration Messagerie par Organisation (Multi-Tenant)
+/// Chaque tenant peut choisir Meta Cloud API ou Twilio BSP
+model MessagingConfig {
+  id                  String                @id @default(cuid())
+  organizationId      String                @unique
+  provider            MessagingProviderType @default(META_CLOUD)
+  isActive            Boolean               @default(false)
+
+  // ─── Meta Cloud API ──────────────────────────────────────
+  metaPhoneNumberId   String?   // Phone Number ID from Meta
+  metaBusinessId      String?   // WhatsApp Business Account ID
+  metaAccessToken     String?   // Permanent token (encrypted)
+
+  // ─── Twilio BSP ──────────────────────────────────────────
+  twilioAccountSid    String?   // Account SID
+  twilioAuthToken     String?   // Auth Token (encrypted)
+  twilioPhoneNumber   String?   // WhatsApp-enabled number
+
+  // ─── Common ──────────────────────────────────────────────
+  defaultCountryCode  String    @default("+33")
+  enabledHooks        Json?     // Admin toggles: {"DOSSIER_STATUS_CHANGE":true,"LEAD_CREATED":false,...}
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
+
+  organization        Organization      @relation(fields: [organizationId], references: [id])
+  templates           MessageTemplate[]
+
+  @@index([organizationId])
+}
+
+/// Templates de messages mappés au fournisseur
+/// Ex: internalKey "RDV_CONFIRMATION" → providerName "rdv_confirm_v1" (Meta)
+model MessageTemplate {
+  id                  String          @id @default(cuid())
+  messagingConfigId   String
+  internalKey         String          // e.g. "RDV_CONFIRMATION", "NO_ANSWER"
+  providerTemplateName String         // Nom du template chez le fournisseur
+  language            String          @default("fr")
+  fallbackText        String?         @db.Text  // Texte de fallback si template échoue
+  isActive            Boolean         @default(true)
+  createdAt           DateTime        @default(now())
+  updatedAt           DateTime        @updatedAt
+
+  config              MessagingConfig @relation(fields: [messagingConfigId], references: [id], onDelete: Cascade)
+
+  @@unique([messagingConfigId, internalKey])
+  @@index([messagingConfigId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MESSAGE HISTORY — Inbox & Conversations
+// ═══════════════════════════════════════════════════════════════
+
+enum MessageDirection {
+  OUTBOUND  // Envoyé depuis la plateforme
+  INBOUND   // Reçu de l'apprenant
+}
+
+enum MessageChannel {
+  WHATSAPP
+  SMS
+}
+
+enum MessageDeliveryStatus {
+  QUEUED     // En file d'attente
+  SENT       // Envoyé au provider
+  DELIVERED  // Délivré au destinataire
+  READ       // Lu par le destinataire
+  FAILED     // Échec d'envoi
+}
+
+/// Message envoyé ou reçu — historique complet des conversations
+model Message {
+  id                String                @id @default(cuid())
+  organizationId    String
+  leadId            String?               // Lien vers Lead (si identifié)
+  dossierId         String?               // Lien vers Dossier (si stage en cours)
+
+  direction         MessageDirection      // OUTBOUND | INBOUND
+  channel           MessageChannel        // WHATSAPP | SMS
+  status            MessageDeliveryStatus @default(SENT)
+
+  phone             String                // Numéro normalisé (ex: 33612345678)
+  content           String    @db.Text    // Contenu du message
+  templateKey       String?               // Clé template si envoi template
+  providerMessageId String?               // ID retourné par Meta/Twilio
+
+  mediaUrl          String?               // URL média joint
+  mediaType         String?               // MIME type (image/jpeg, application/pdf)
+
+  sentById          String?               // User qui a envoyé (null si INBOUND)
+  errorMessage      String?               // Détail erreur si FAILED
+  isRead            Boolean   @default(false) // Lu par l'équipe (pour INBOUND)
+
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  organization      Organization @relation(fields: [organizationId], references: [id])
+  lead              Lead?        @relation(fields: [leadId], references: [id], onDelete: SetNull)
+  dossier           Dossier?     @relation(fields: [dossierId], references: [id], onDelete: SetNull)
+  sentBy            User?        @relation("MessageSentBy", fields: [sentById], references: [id])
+
+  @@index([organizationId])
+  @@index([leadId])
+  @@index([dossierId])
+  @@index([phone])
+  @@index([direction])
+  @@index([createdAt])
+  @@index([organizationId, phone, createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// MESSAGING AUTOMATION — Workflows, Scheduler, Séquences
+// ═══════════════════════════════════════════════════════════════
+
+enum AutomationEvent {
+  INSCRIPTION_CONFIRMED    // Dossier → ADMIS
+  SESSION_J7               // 7 jours avant session.dateDebut
+  SESSION_J1               // 1 jour avant session.dateDebut
+  ABSENCE_DETECTED         // Emargement.estPresent = false
+  MODULE_COMPLETED         // Dossier → TERMINE
+  SIGNATURE_MISSING        // Emargement sans signature > 24h
+  SESSION_J1_POST          // 1 jour après session.dateFin
+  DOSSIER_STATUS_CHANGE    // Tout changement de statut dossier
+  LEAD_CREATED             // Nouveau lead créé
+  LEAD_QUALIFIED           // Lead → QUALIFIED
+}
+
+enum ScheduledMessageStatus {
+  PENDING      // En attente d'envoi
+  PROCESSING   // En cours d'envoi
+  SENT         // Envoyé avec succès
+  FAILED       // Échec après retries
+  CANCELLED    // Annulé manuellement
+}
+
+enum SequenceStatus {
+  ACTIVE           // En cours
+  PAUSED           // Pausée
+  COMPLETED        // Toutes les étapes exécutées
+  STOPPED_BY_REPLY // Arrêtée car le contact a répondu
+}
+
+/// Règle d'automatisation — Event → Message
+model MessageAutomation {
+  id               String           @id @default(cuid())
+  organizationId   String
+  name             String           // Nom lisible (ex: "Rappel J-7")
+  description      String?
+  event            AutomationEvent  // Événement déclencheur
+  isActive         Boolean          @default(true)
+  channel          MessageChannel   @default(WHATSAPP)
+
+  // Contenu du message
+  templateKey      String?          // Clé template Meta (si template)
+  content          String?  @db.Text // Contenu freeform (avec variables {nom}, {date}, etc.)
+
+  // Timing
+  delayMinutes     Int              @default(0) // Délai après l'événement (0 = immédiat)
+
+  // Conditions avancées (JSON)
+  conditions       String?  @db.Text // ex: {"status": "ADMIS", "formation": "CDA"}
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  scheduledMessages ScheduledMessage[]
+
+  @@index([organizationId])
+  @@index([event])
+  @@index([isActive])
+}
+
+/// Message programmé dans la file d'attente
+model ScheduledMessage {
+  id               String                 @id @default(cuid())
+  organizationId   String
+  automationId     String?                // Lié à une automation (null si programmé manuellement)
+  sequenceEnrollmentId String?            // Lié à une séquence (null si standalone)
+
+  phone            String
+  content          String     @db.Text
+  channel          MessageChannel @default(WHATSAPP)
+  templateKey      String?
+
+  scheduledAt      DateTime               // Date/heure d'envoi prévu
+  status           ScheduledMessageStatus @default(PENDING)
+  retryCount       Int                    @default(0)
+  maxRetries       Int                    @default(3)
+  lastError        String?
+
+  leadId           String?
+  dossierId        String?
+  sentById         String?
+  messageId        String?                // ID du Message créé après envoi
+
+  createdAt        DateTime   @default(now())
+  updatedAt        DateTime   @updatedAt
+
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  automation       MessageAutomation? @relation(fields: [automationId], references: [id], onDelete: SetNull)
+
+  @@index([organizationId])
+  @@index([status, scheduledAt])
+  @@index([automationId])
+  @@index([sequenceEnrollmentId])
+}
+
+/// Séquence de messages multi-étapes
+model MessageSequence {
+  id               String           @id @default(cuid())
+  organizationId   String
+  name             String           // Ex: "Onboarding J-7 → J+1"
+  description      String?
+  triggerEvent     AutomationEvent  // Événement qui démarre la séquence
+  stopOnReply      Boolean          @default(true) // Arrêt auto si réponse
+  isActive         Boolean          @default(true)
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization     Organization          @relation(fields: [organizationId], references: [id])
+  steps            MessageSequenceStep[]
+  enrollments      SequenceEnrollment[]
+
+  @@index([organizationId])
+  @@index([triggerEvent])
+  @@index([isActive])
+}
+
+/// Étape dans une séquence de messages
+model MessageSequenceStep {
+  id               String           @id @default(cuid())
+  sequenceId       String
+  stepOrder        Int              // 1, 2, 3...
+  delayDays        Int              // Relatif au trigger: -7=J-7, -1=J-1, 0=Jour J, 1=J+1
+  channel          MessageChannel   @default(WHATSAPP)
+
+  // Contenu
+  templateKey      String?
+  content          String?  @db.Text // Message freeform avec variables
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  sequence         MessageSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  @@unique([sequenceId, stepOrder])
+  @@index([sequenceId])
+}
+
+/// Inscription d'un contact à une séquence active
+model SequenceEnrollment {
+  id               String           @id @default(cuid())
+  sequenceId       String
+  organizationId   String
+  phone            String
+  leadId           String?
+  dossierId        String?
+
+  status           SequenceStatus   @default(ACTIVE)
+  currentStep      Int              @default(0) // Dernière étape exécutée
+  nextStepAt       DateTime?        // Prochaine exécution planifiée
+  referenceDate    DateTime         // Date de référence (dateDebut session, etc.)
+
+  stoppedAt        DateTime?
+  stoppedReason    String?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  sequence         MessageSequence @relation(fields: [sequenceId], references: [id], onDelete: Cascade)
+
+  @@index([sequenceId])
+  @@index([organizationId])
+  @@index([status, nextStepAt])
+  @@index([phone])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// BROADCAST — Envoi groupé & Segmentation
+// ═══════════════════════════════════════════════════════════════
+
+enum BroadcastStatus {
+  DRAFT          // Brouillon
+  SENDING        // Envoi en cours
+  PAUSED         // Pausé
+  COMPLETED      // Terminé
+  FAILED         // Échoué
+  CANCELLED      // Annulé
+}
+
+enum BroadcastRecipientStatus {
+  PENDING        // En attente
+  SENT           // Envoyé
+  DELIVERED      // Délivré
+  READ           // Lu
+  FAILED         // Échoué
+}
+
+/// Campagne d'envoi groupé
+model Broadcast {
+  id               String           @id @default(cuid())
+  organizationId   String
+  name             String           // "Rappel session Mars 2026"
+  description      String?
+  channel          MessageChannel   @default(WHATSAPP)
+
+  // Contenu
+  templateKey      String?          // Template Meta approuvé
+  content          String?  @db.Text // Freeform (si pas de template)
+
+  // Filtres de ciblage (JSON)
+  filters          String   @db.Text // {sessionId, siteId, status[], formation, tags[]}
+
+  // Stats
+  totalRecipients  Int              @default(0)
+  sentCount        Int              @default(0)
+  deliveredCount   Int              @default(0)
+  failedCount      Int              @default(0)
+
+  status           BroadcastStatus  @default(DRAFT)
+  startedAt        DateTime?
+  completedAt      DateTime?
+  createdById      String?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization     Organization      @relation(fields: [organizationId], references: [id])
+  recipients       BroadcastRecipient[]
+
+  @@index([organizationId])
+  @@index([status])
+  @@index([createdAt])
+}
+
+/// Suivi par destinataire d'un broadcast
+model BroadcastRecipient {
+  id               String                    @id @default(cuid())
+  broadcastId      String
+  phone            String
+  leadId           String?
+  dossierId        String?
+
+  status           BroadcastRecipientStatus  @default(PENDING)
+  externalId       String?                   // Meta message ID
+  error            String?
+  sentAt           DateTime?
+  deliveredAt      DateTime?
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  broadcast        Broadcast @relation(fields: [broadcastId], references: [id], onDelete: Cascade)
+
+  @@index([broadcastId])
+  @@index([broadcastId, status])
+  @@index([phone])
+}
+
+/// Tags personnalisés pour leads (segmentation)
+model ContactTag {
+  id               String @id @default(cuid())
+  organizationId   String
+  leadId           String
+  tag              String          // ex: "VIP", "formation-dev-web", "promo-2026"
+
+  createdAt        DateTime @default(now())
+
+  organization     Organization @relation(fields: [organizationId], references: [id])
+  lead             Lead         @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, leadId, tag])
+  @@index([organizationId, tag])
+  @@index([leadId])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// CHATBOT — Auto-réponses & Menus interactifs
+// ═══════════════════════════════════════════════════════════════
+
+enum ChatbotResponseType {
+  TEXT                    // Réponse texte simple
+  INTERACTIVE_BUTTONS     // Boutons (max 3)
+  INTERACTIVE_LIST        // Liste à sections
+  REDIRECT_HUMAN          // Redirection vers conseiller
+}
+
+/// Règle de réponse automatique
+model ChatbotRule {
+  id               String               @id @default(cuid())
+  organizationId   String
+  name             String               // "Réponse horaires"
+  keywords         String               // Mots-clés séparés par virgule ("horaires,heures,ouverture")
+  pattern          String?              // Regex pattern optionnel
+  responseType     ChatbotResponseType  @default(TEXT)
+  response         String   @db.Text    // JSON: {text, buttons[], sections[]}
+  isActive         Boolean              @default(true)
+  priority         Int                  @default(0)    // Plus haut = prioritaire
+  isDefault        Boolean              @default(false) // Règle système non supprimable
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  organization     Organization @relation(fields: [organizationId], references: [id])
+
+  @@index([organizationId, isActive])
+  @@index([priority])
+}
+
+/// État conversation chatbot par contact
+model ChatbotConversation {
+  id               String   @id @default(cuid())
+  organizationId   String
+  phone            String
+  isHumanHandoff   Boolean  @default(false)  // Redirigé vers humain
+  handoffAt        DateTime?
+  lastBotReplyAt   DateTime?                 // Cooldown anti-spam
+  lastMenuSent     String?                   // Dernier menu envoyé (pour contexte)
+
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@unique([organizationId, phone])
+  @@index([organizationId])
+  @@index([phone])
+}
+
+/// Action déclenchée par une réponse interactive WhatsApp
+model InteractiveAction {
+  id             String    @id @default(cuid())
+  organizationId String
+  phone          String
+  dossierId      String?
+  actionType     String    // CONFIRM_PRESENCE, RESCHEDULE, SELECT_SLOT, SELECT_DOCUMENT, SURVEY_RESPONSE
+  actionData     Json?     // Données spécifiques (créneau choisi, note satisfaction, etc.)
+  replyId        String    // ID du bouton/item cliqué
+  status         String    @default("PENDING") // PENDING, APPLIED, FAILED
+  errorMessage   String?
+  appliedAt      DateTime?
+  createdAt      DateTime  @default(now())
+
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  dossier        Dossier?     @relation(fields: [dossierId], references: [id])
+
+  @@index([organizationId])
+  @@index([dossierId])
+  @@index([phone])
+  @@index([actionType])
+}
+
+enum SessionStatus {
+  PLANIFIE
+  CONFIRME
+  EN_COURS
+  TERMINE
+  ANNULE
+}
+
+/// Configuration IA (OpenAI, Anthropic, Mistral)
+model AISettings {
+  id             String       @id @default(cuid())
+  organizationId String       @unique
+  organization   Organization @relation(fields: [organizationId], references: [id])
+  
+  provider       String       @default("openai") // openai, anthropic, mistral
+  model          String?      // e.g. gpt-4o, claude-3-opus
+  apiKey         String?      // Stockage de la clé (Idéalement crypté en prod)
+  isActive       Boolean      @default(true)
+  
+  createdAt      DateTime     @default(now())
+  updatedAt      DateTime     @updatedAt
 }

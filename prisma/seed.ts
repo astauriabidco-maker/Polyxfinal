@@ -19,38 +19,21 @@ import {
 } from '@prisma/client';
 import { ROLE_IDS } from '../src/lib/constants/roles';
 import bcrypt from 'bcryptjs';
-import { dispatchLead } from '../src/lib/network/dispatch';
+import { dispatchLead } from '../src/lib/dossiers/dispatch';
 
 const prisma = new PrismaClient();
 
 async function main() {
     console.log('🌱 Démarrage du Super-Seed...');
 
-    // 1. Nettoyage complet (ordre inverse des dépendances)
+    // 1. Nettoyage complet via TRUNCATE CASCADE (évite les erreurs FK)
     console.log('🧹 Nettoyage de la base de données...');
-    await prisma.rolePermission.deleteMany();
-    await prisma.permission.deleteMany();
-    await prisma.auditLog.deleteMany();
-    await prisma.complianceAlert.deleteMany();
-    await prisma.evaluation.deleteMany();
-    await prisma.emargement.deleteMany();
-    await prisma.avenant.deleteMany();
-    await prisma.preuve.deleteMany();
-    await prisma.contrat.deleteMany();
-    await prisma.programmeSnapshot.deleteMany();
-    await prisma.dossier.deleteMany();
-    await prisma.financeur.deleteMany();
-    await prisma.session.deleteMany();
-    await prisma.programme.deleteMany();
-    await prisma.certification.deleteMany();
-    await prisma.company.deleteMany();
-    await prisma.territory.deleteMany();
-    await prisma.franchiseCandidate.deleteMany();
-    await prisma.membershipSiteAccess.deleteMany();
-    await prisma.membership.deleteMany();
-    await prisma.site.deleteMany();
-    await prisma.user.deleteMany();
-    await prisma.organization.deleteMany();
+    const tablenames = await prisma.$queryRaw<Array<{ tablename: string }>>`
+        SELECT tablename FROM pg_tables WHERE schemaname = 'public' AND tablename != '_prisma_migrations'
+    `;
+    for (const { tablename } of tablenames) {
+        await prisma.$executeRawUnsafe(`TRUNCATE TABLE "public"."${tablename}" CASCADE`);
+    }
 
     // 1b. Seed des Rôles Système (upsert pour idempotence)
     console.log('🛡️ Création des rôles système...');
@@ -254,10 +237,10 @@ async function main() {
         data: {
             organizationId: orgCfa.id,
             reference: 'CFA-DEV-2024-001',
-            intitule: 'Titre Professionnel Développeur Web',
-            objectifs: 'Maîtriser le développement front et back-end',
+            title: 'Titre Professionnel Développeur Web',
+            objectifs: ['Maîtriser le développement front et back-end'],
             prerequis: 'Niveau Bac, goût pour la programmation',
-            contenu: 'HTML/CSS, JavaScript, React, Node.js, SQL',
+            contenu: { text: 'HTML/CSS, JavaScript, React, Node.js, SQL' },
             modalitesEval: 'Projets individuels et collectifs, certification finale',
             moyensPedago: 'Salles informatiques, supports numériques',
             dureeHeures: 1200,
@@ -399,10 +382,10 @@ async function main() {
         data: {
             organizationId: orgOfReseau.id,
             reference: 'OF-MGMT-2024-001',
-            intitule: 'Management d\'équipe',
-            objectifs: 'Développer les compétences managériales',
+            title: 'Management d\'équipe',
+            objectifs: ['Développer les compétences managériales'],
             prerequis: 'Expérience en entreprise souhaitée',
-            contenu: 'Leadership, Communication, Gestion des conflits',
+            contenu: { text: 'Leadership, Communication, Gestion des conflits' },
             modalitesEval: 'Mises en situation, étude de cas',
             moyensPedago: 'Supports numériques, jeux de rôle',
             dureeHeures: 35,
@@ -529,10 +512,10 @@ async function main() {
         data: {
             organizationId: orgNewbie.id,
             reference: 'START-FORM-2024-001',
-            intitule: 'Initiation Excel',
-            objectifs: 'Maîtriser les bases d\'Excel',
+            title: 'Initiation Excel',
+            objectifs: ['Maîtriser les bases d\'Excel'],
             prerequis: 'Aucun',
-            contenu: 'Tableaux, Formules, Graphiques',
+            contenu: { text: 'Tableaux, Formules, Graphiques' },
             modalitesEval: 'QCM final',
             moyensPedago: 'PC équipé, supports PDF',
             dureeHeures: 14,
@@ -704,10 +687,10 @@ async function main() {
         data: {
             organizationId: orgSiege.id,
             reference: 'HQ-RESEAU-2024-001',
-            intitule: 'Formation Réseau National',
-            objectifs: 'Former les franchisés',
+            title: 'Formation Réseau National',
+            objectifs: ['Former les franchisés'],
             prerequis: 'Aucun',
-            contenu: 'Modules réseau',
+            contenu: { text: 'Modules réseau' },
             modalitesEval: 'QCM + projet',
             moyensPedago: 'En ligne',
             dureeHeures: 21,
@@ -717,6 +700,63 @@ async function main() {
             status: PhaseStatus.ACTIF,
         }
     });
+
+    // 4h. Master Management - Programme "Master Catalog" du Siège
+    console.log('👑 Création du Master Catalog "Master Management" au Siège...');
+    const masterProgram = await prisma.programme.create({
+        data: {
+            organizationId: orgSiege.id,
+            reference: 'MASTER-MGT-2026',
+            title: 'Master Management (Programme Franchisé)',
+            objectifs: ['Standardiser les pratiques managériales', 'Aligner la culture réseau'],
+            prerequis: 'Être franchisé ou directeur d\'agence',
+            publicCible: 'Directeurs d\'agence, Managers',
+            contenu: {
+                day1: 'Culture d\'entreprise',
+                day2: 'Gestion financière',
+                day3: 'Management RH'
+            },
+            dureeHeures: 21,
+            dureeJours: 3,
+            modalite: 'DISTANCIEL',
+            isTemplate: true, // C'est un modèle !
+            isPublished: true,
+            status: PhaseStatus.ACTIF,
+            tarifHT: 2000,
+            tarifInter: 2000,
+            tarifIntra: 15000,
+        }
+    });
+
+    console.log('📡 Publication automatique vers le réseau (Simulation)...');
+    // On simule la logique de la Server Action ici pour le seed
+    // Trouver les enfants (Franchise Lyon)
+    const franchises = await prisma.organization.findMany({
+        where: { parentId: orgSiege.id }
+    });
+
+    for (const franchise of franchises) {
+        console.log(`   -> Clonage vers ${franchise.name}...`);
+        await prisma.programme.create({
+            data: {
+                organizationId: franchise.id,
+                reference: masterProgram.reference, // Même ref ? Ou ref-franchise ? Disons même ref.
+                title: masterProgram.title,
+                objectifs: masterProgram.objectifs, // Copie brute
+                prerequis: masterProgram.prerequis,
+                publicCible: masterProgram.publicCible,
+                contenu: masterProgram.contenu ?? {},
+                dureeHeures: masterProgram.dureeHeures,
+                dureeJours: masterProgram.dureeJours,
+                modalite: masterProgram.modalite,
+                isTemplate: false, // Ce n'est pas un template, c'est une instance
+                originalTemplateId: masterProgram.id, // LIEN PARENT
+                status: PhaseStatus.ACTIF,
+                isPublished: true,
+            }
+        });
+    }
+
 
     const sessionSiege = await prisma.session.create({
         data: {
@@ -751,7 +791,7 @@ async function main() {
     try {
         const dispatchResult = await dispatchLead(dossierADispatcer.id, '69001');
         if (dispatchResult.matched) {
-            console.log(`   ✅ DISPATCH RÉUSSI: Dossier transféré à "${dispatchResult.targetOrgName}"`);
+            console.log(`   ✅ DISPATCH RÉUSSI: Dossier transféré à "${dispatchResult.targetFranchiseName}"`);
             console.log(`   📍 Territoire: ${dispatchResult.territoryName}`);
         } else {
             console.log('   ⚠️ DISPATCH: Pas de match territorial trouvé');

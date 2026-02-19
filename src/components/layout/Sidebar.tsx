@@ -110,6 +110,11 @@ const Icons = {
             <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 5a2 2 0 012-2h3.28a1 1 0 01.948.684l1.498 4.493a1 1 0 01-.502 1.21l-2.257 1.13a11.042 11.042 0 005.516 5.516l1.13-2.257a1 1 0 011.21-.502l4.493 1.498a1 1 0 01.684.949V19a2 2 0 01-2 2h-1C9.716 21 3 14.284 3 6V5z" />
         </svg>
     ),
+    book: (
+        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253" />
+        </svg>
+    ),
 };
 
 // Configuration claire des menus
@@ -134,14 +139,208 @@ const MENU_SECTIONS: MenuSection[] = [
         ],
     },
     {
-        title: 'Gestion Opérationnelle',
+        title: 'Messagerie & Communication',
         items: [
+            {
+                id: 'inbox',
+                label: 'Boîte de réception',
+                href: '/messaging',
+                icon: (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                ),
+                description: 'Conversations WhatsApp',
+            },
+            {
+                id: 'broadcasts',
+                label: 'Campagnes (Broadcasts)',
+                href: '/messaging/broadcasts',
+                icon: (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11 5.882V19.24a1.76 1.76 0 01-3.417.592l-2.147-6.15M18 13a3 3 0 100-6M5.436 13.683A4.001 4.001 0 017 6h1.832c4.1 0 7.625-1.234 9.168-3v14c-1.543-1.766-5.067-3-9.168-3H7a3.988 3.988 0 01-1.564-.317z" />
+                    </svg>
+                ),
+                description: 'Envois groupés',
+            },
+            {
+                id: 'automations',
+                label: 'Automations',
+                href: '/messaging/automations',
+                icon: (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                ),
+                description: 'Workflows & séquences auto',
+            },
+            {
+                id: 'chatbot',
+                label: 'Chatbot & IA',
+                href: '/messaging/chatbot',
+                icon: (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.75 17L9 20l-1 1h8l-1-1-.75-3M3 13h18M5 17h14a2 2 0 002-2V5a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                    </svg>
+                ),
+                description: 'Réponses auto & menus',
+            },
+            {
+                id: 'messaging-config',
+                label: 'Configuration',
+                href: '/settings/messaging',
+                icon: Icons.settings,
+                description: 'Paramètres WhatsApp & SMS',
+            },
+            {
+                id: 'analytics-messaging',
+                label: 'Analytics',
+                href: '/messaging/analytics',
+                icon: (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                    </svg>
+                ),
+                description: 'Performances & coûts',
+            },
+        ]
+    },
+    {
+        title: 'Commerce & Leads',
+        items: [
+            {
+                id: 'my-leads',
+                label: 'Mes Leads',
+                href: '/prospection/leads',
+                icon: Icons.phone,
+                description: 'Traiter mes leads',
+            },
+            {
+                id: 'leads',
+                label: 'Pipeline Global',
+                href: '/prospection',
+                icon: Icons.chart,
+                description: 'Vue d\'ensemble',
+            },
+            {
+                id: 'crm-kanban',
+                label: 'Suivi Commercial',
+                href: '/crm',
+                icon: Icons.list,
+                description: 'Kanban post-RDV',
+            },
+            {
+                id: 'zonage',
+                label: 'Zonage & Dispatch',
+                href: '/prospection/zonage',
+                icon: Icons.mapPin,
+                description: 'Dispatch auto CP → Agence',
+            },
+            {
+                id: 'lead-quality',
+                label: 'Qualité & Scores',
+                href: '/prospection/partners/quality',
+                icon: Icons.target,
+                description: 'Scores et métriques qualité',
+            },
+            {
+                id: 'partners',
+                label: 'Sources / Partenaires',
+                href: '/prospection/partners',
+                icon: Icons.users,
+                description: 'Prestataires externes',
+            },
+            {
+                id: 'network-config',
+                label: 'Configuration Réseau',
+                href: '/prospection/partners?tab=settings',
+                icon: Icons.settings,
+                description: 'Emails et Documentation',
+            },
+        ]
+    },
+    {
+        title: 'Pédagogie & Formation',
+        items: [
+            {
+                id: 'catalogue',
+                label: 'Catalogue Formation',
+                href: '/catalogue',
+                icon: Icons.book,
+                description: 'Programmes & Master Catalog',
+            },
             {
                 id: 'dossiers',
                 label: 'Dossiers Stagiaires',
                 href: '/dashboard',
                 icon: Icons.folder,
                 description: 'Gérer les dossiers de formation',
+            },
+        ],
+    },
+    {
+        title: 'Conformité & Qualité',
+        items: [
+            {
+                id: 'compliance',
+                label: 'Centre de Conformité',
+                href: '/compliance',
+                icon: Icons.shield,
+                description: 'Pilotage BPF, OPCO, RGPD...',
+            },
+            {
+                id: 'qualiopi',
+                label: 'Suivi Qualiopi',
+                href: '/dashboard/qualiopi',
+                icon: Icons.check,
+                description: 'Tableau de bord Qualiopi',
+            },
+            {
+                id: 'rgpd-register',
+                label: 'Registre RGPD',
+                href: '/prospection/rgpd',
+                icon: Icons.shield,
+                description: 'Registre Art. 30 des traitements',
+            },
+            {
+                id: 'partner-qualification',
+                label: 'Qualification Partenaires',
+                href: '/prospection/partners/qualification',
+                icon: Icons.check,
+                description: 'Qualiopi Ind. 17 & 26',
+            },
+        ],
+    },
+    {
+        title: 'Réseau Franchise',
+        items: [
+            {
+                id: 'candidates',
+                label: 'Candidats Franchise',
+                href: '/network/candidates',
+                icon: Icons.store,
+                description: 'Gérer les candidats au réseau',
+            },
+            {
+                id: 'territories',
+                label: 'Territoires',
+                href: '/network/territories',
+                icon: Icons.target,
+                description: 'Zones géographiques exclusives',
+            },
+            {
+                id: 'royalties',
+                label: 'Redevances',
+                href: '/network/royalties',
+                icon: Icons.coins,
+                description: 'Calcul et suivi des redevances',
+            },
+            {
+                id: 'franchise-config',
+                label: 'Configuration',
+                href: '/network/settings',
+                icon: Icons.settings,
+                description: 'Templates emails et documentation',
             },
         ],
     },
@@ -181,126 +380,24 @@ const MENU_SECTIONS: MenuSection[] = [
                 description: 'Configurer les rôles et accès',
             },
             {
+                id: 'ai-settings',
+                label: 'Configuration IA',
+                href: '/settings/ai',
+                icon: (
+                    <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 10V3L4 14h7v7l9-11h-7z" />
+                    </svg>
+                ),
+                description: 'Modèles & Clés API',
+            },
+            {
                 id: 'settings',
-                label: 'Paramètres',
+                label: 'Paramètres Généraux',
                 href: '#',
                 icon: Icons.settings,
                 badge: 'Bientôt',
                 badgeColor: 'bg-slate-600',
                 description: 'Configuration générale',
-            },
-        ],
-    },
-    {
-        title: 'Conformité & Qualité',
-        items: [
-            {
-                id: 'compliance',
-                label: 'Moteur de Règles',
-                href: '/demo/compliance',
-                icon: Icons.shield,
-                description: 'Vérification de conformité',
-            },
-            {
-                id: 'qualiopi',
-                label: 'Suivi Qualiopi',
-                href: '/dashboard/qualiopi',
-                icon: Icons.check,
-                description: 'Tableau de bord Qualiopi',
-            },
-            {
-                id: 'rgpd-register',
-                label: 'Registre RGPD',
-                href: '/prospection/rgpd',
-                icon: Icons.shield,
-                description: 'Registre Art. 30 des traitements',
-            },
-            {
-                id: 'partner-qualification',
-                label: 'Qualification Partenaires',
-                href: '/prospection/partners/qualification',
-                icon: Icons.check,
-                description: 'Qualiopi Ind. 17 & 26',
-            },
-        ],
-    },
-    {
-        title: 'Prospection',
-        items: [
-            {
-                id: 'dispatcher',
-                label: 'Dispatcher',
-                href: '/prospection/dispatch',
-                icon: Icons.share,
-                description: 'Affectation des leads',
-            },
-            {
-                id: 'my-leads',
-                label: 'Mes Leads',
-                href: '/prospection/leads',
-                icon: Icons.phone,
-                description: 'Traiter mes leads',
-            },
-            {
-                id: 'leads',
-                label: 'Pipeline Leads',
-                href: '/prospection',
-                icon: Icons.chart,
-                description: 'Vue d\'ensemble',
-            },
-            {
-                id: 'partners',
-                label: 'Partenaires API',
-                href: '/prospection/partners',
-                icon: Icons.users,
-                description: 'Prestataires externes',
-            },
-            {
-                id: 'lead-quality',
-                label: 'Qualité Leads',
-                href: '/prospection/partners/quality',
-                icon: Icons.chart,
-                description: 'Scores et métriques qualité',
-            },
-            {
-                id: 'network-config',
-                label: 'Configuration Réseau',
-                href: '/prospection/partners?tab=settings',
-                icon: Icons.settings,
-                description: 'Emails et Documentation',
-            },
-        ],
-    },
-    {
-        title: 'Réseau Franchise',
-        items: [
-            {
-                id: 'candidates',
-                label: 'Candidats Franchise',
-                href: '/network/candidates',
-                icon: Icons.store,
-                description: 'Gérer les candidats au réseau',
-            },
-            {
-                id: 'territories',
-                label: 'Territoires',
-                href: '/network/territories',
-                icon: Icons.target,
-                description: 'Zones géographiques exclusives',
-            },
-            {
-                id: 'royalties',
-                label: 'Redevances',
-                href: '/network/royalties',
-                icon: Icons.coins,
-                description: 'Calcul et suivi des redevances',
-            },
-            {
-                id: 'franchise-config',
-                label: 'Configuration',
-                href: '/network/settings',
-                icon: Icons.settings,
-                description: 'Templates emails et documentation',
             },
         ],
     },
@@ -310,18 +407,26 @@ const MENU_SECTIONS: MenuSection[] = [
 const MENU_ITEM_PERMISSION_MAP: Record<string, string> = {
     'portfolio': 'module:portfolio',
     'dashboard': 'module:dashboard',
+    'catalogue': 'module:dossiers',
     'dossiers': 'module:dossiers',
     'org-list': 'module:organizations',
     'sites': 'module:sites',
     'users': 'module:users',
     'roles': 'module:roles',
     'settings': 'module:settings',
+    'ai-settings': 'module:settings',
+    'messaging-config': 'module:settings',
     'compliance': 'module:compliance',
     'qualiopi': 'module:qualiopi',
     'rgpd-register': 'module:rgpd',
     'partner-qualification': 'module:partner_qualification',
-    'dispatcher': 'module:dispatcher',
+
     'my-leads': 'module:my_leads',
+    'inbox': 'module:my_leads',
+    'automations': 'module:my_leads',
+    'broadcasts': 'module:my_leads',
+    'chatbot': 'module:my_leads',
+    'analytics-messaging': 'module:my_leads',
     'leads': 'module:leads',
     'partners': 'module:partners',
     'lead-quality': 'module:lead_quality',
@@ -331,6 +436,8 @@ const MENU_ITEM_PERMISSION_MAP: Record<string, string> = {
     'dispatch': 'module:candidates', // same category as candidates
     'territories': 'module:territories',
     'royalties': 'module:royalties',
+    'zonage': 'module:zonage',
+    'crm-kanban': 'module:crm',
 };
 
 interface SidebarProps {
