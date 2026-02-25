@@ -5,10 +5,11 @@ import { LeadStatus, Prisma } from '@prisma/client';
 import { revalidatePath } from 'next/cache';
 import { z } from 'zod';
 import { notifyLeadInteraction, notifyLeadQualified, notifyLeadConverted } from '@/lib/messaging/notification-hooks';
+import { refreshLeadScore } from '@/lib/prospection/lead-scoring';
 
-// --- Constantes Pipeline / CRM ---
+// --- Constantes Pipeline / CRM (local, not exported — 'use server' only exports async functions) ---
 
-export const PIPELINE_STATUSES: LeadStatus[] = [
+const PIPELINE_STATUSES: LeadStatus[] = [
     LeadStatus.NEW,
     LeadStatus.DISPATCHED,
     LeadStatus.A_RAPPELER,
@@ -16,9 +17,15 @@ export const PIPELINE_STATUSES: LeadStatus[] = [
     LeadStatus.PAS_INTERESSE,
 ];
 
-export const CRM_STATUSES: LeadStatus[] = [
+const CRM_STATUSES: LeadStatus[] = [
     LeadStatus.RDV_PLANIFIE,
     LeadStatus.RDV_NON_HONORE,
+    LeadStatus.RDV_ANNULE,
+    LeadStatus.DECISION_EN_ATTENTE,
+    LeadStatus.TEST_EN_COURS_PERSO,
+    LeadStatus.EN_ATTENTE_PAIEMENT,
+    LeadStatus.INSCRIT_PERSO,
+    LeadStatus.CPF_COMPTE_A_DEMANDER,
     LeadStatus.COURRIERS_ENVOYES,
     LeadStatus.COURRIERS_RECUS,
     LeadStatus.NEGOCIATION,
@@ -49,8 +56,10 @@ const ReassignLeadSchema = z.object({
 const UpdateCRMStatusSchema = z.object({
     leadId: z.string(),
     status: z.enum([
-        'RDV_PLANIFIE', 'RDV_NON_HONORE', 'COURRIERS_ENVOYES',
-        'COURRIERS_RECUS', 'NEGOCIATION', 'CONVERTI', 'PROBLEMES_SAV', 'PERDU'
+        'RDV_PLANIFIE', 'RDV_NON_HONORE', 'RDV_ANNULE', 'DECISION_EN_ATTENTE',
+        'TEST_EN_COURS_PERSO', 'EN_ATTENTE_PAIEMENT', 'INSCRIT_PERSO', 'CPF_COMPTE_A_DEMANDER',
+        'COURRIERS_ENVOYES', 'COURRIERS_RECUS', 'NEGOCIATION', 'CONVERTI',
+        'PROBLEMES_SAV', 'PERDU'
     ]),
     lostReason: z.string().optional(),
 });
@@ -147,6 +156,7 @@ export async function autoDispatchByZipCode(leadId: string, zipCode: string, org
 
 /**
  * Enregistrer une interaction Pipeline (call, rdv, etc.)
+ * ⚠️ BOOK_RDV est bloqué si le lead n'a pas de consentement RGPD
  */
 export async function registerInteraction(data: z.infer<typeof RegisterInteractionSchema>) {
     const result = RegisterInteractionSchema.safeParse(data);
@@ -173,6 +183,20 @@ export async function registerInteraction(data: z.infer<typeof RegisterInteracti
             break;
         case 'BOOK_RDV':
             if (!details.dateRdv) return { success: false, error: 'Date RDV required' };
+
+            // ⚠️ RGPD Guard: Vérifier le consentement avant de planifier un RDV
+            const consent = await prisma.leadConsent.findUnique({
+                where: { leadId },
+                select: { consentGiven: true, withdrawnAt: true, anonymizedAt: true },
+            });
+            if (!consent || !consent.consentGiven || consent.withdrawnAt || consent.anonymizedAt) {
+                return {
+                    success: false,
+                    error: 'CONSENT_REQUIRED',
+                    message: '⚠️ Consentement RGPD requis avant de planifier un RDV. Recueillez le consentement du prospect d\'abord.',
+                };
+            }
+
             newStatus = LeadStatus.RDV_PLANIFIE; // Bascule vers CRM
             updateData.dateRdv = new Date(details.dateRdv);
             break;
@@ -223,10 +247,70 @@ export async function registerInteraction(data: z.infer<typeof RegisterInteracti
             }
         }
 
+        // Dynamic score refresh (async)
+        refreshLeadScore(leadId).catch(err => console.error('[Scoring] Refresh failed:', err));
+
         return { success: true };
     } catch (error) {
         console.error('Error registering interaction:', error);
         return { success: false, error: 'Failed to register interaction' };
+    }
+}
+
+/**
+ * Recueillir / Enregistrer le consentement RGPD d'un lead
+ */
+export async function recordConsent(leadId: string, consentGiven: boolean = true) {
+    try {
+        const timestamp = new Date().toLocaleString('fr-FR', { dateStyle: 'short', timeStyle: 'short' });
+
+        await prisma.leadConsent.upsert({
+            where: { leadId },
+            update: {
+                consentGiven,
+                consentText: consentGiven
+                    ? `Consentement recueilli manuellement le ${timestamp}`
+                    : `Consentement refusé le ${timestamp}`,
+                consentMethod: 'manual_update',
+                legalBasis: consentGiven ? 'consent' : 'legitimate_interest',
+                withdrawnAt: consentGiven ? null : new Date(),
+            },
+            create: {
+                leadId,
+                consentGiven,
+                consentText: consentGiven
+                    ? `Consentement recueilli manuellement le ${timestamp}`
+                    : `Saisie sans consentement le ${timestamp}`,
+                consentMethod: 'manual_update',
+                legalBasis: consentGiven ? 'consent' : 'legitimate_interest',
+            },
+        });
+
+        // Add note to lead
+        const currentLead = await prisma.lead.findUnique({
+            where: { id: leadId },
+            select: { notes: true },
+        });
+        const newEntry = `[${timestamp}] 🛡️ ${consentGiven ? 'Consentement RGPD recueilli' : 'Consentement RGPD refusé'}`;
+        const concatenatedNotes = currentLead?.notes
+            ? newEntry + '\n' + currentLead.notes
+            : newEntry;
+
+        await prisma.lead.update({
+            where: { id: leadId },
+            data: { notes: concatenatedNotes },
+        });
+
+        // Dynamic score refresh (consent affects score)
+        refreshLeadScore(leadId).catch(err => console.error('[Scoring] Refresh failed:', err));
+
+        revalidatePath('/prospection');
+        revalidatePath('/prospection/leads');
+        revalidatePath('/crm');
+        return { success: true };
+    } catch (error) {
+        console.error('Error recording consent:', error);
+        return { success: false, error: 'Failed to record consent' };
     }
 }
 
@@ -312,6 +396,9 @@ export async function updateCRMStatus(data: z.infer<typeof UpdateCRMStatusSchema
             }
         }
 
+        // Dynamic score refresh (async)
+        refreshLeadScore(leadId).catch(err => console.error('[Scoring] Refresh failed:', err));
+
         return { success: true };
     } catch (error) {
         console.error('Error updating CRM status:', error);
@@ -332,6 +419,9 @@ export async function updatePipelineStatus(leadId: string, status: LeadStatus) {
             where: { id: leadId },
             data: { status },
         });
+
+        // Dynamic score refresh (async)
+        refreshLeadScore(leadId).catch(err => console.error('[Scoring] Refresh failed:', err));
 
         revalidatePath('/prospection');
         return { success: true };

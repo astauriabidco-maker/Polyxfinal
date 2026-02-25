@@ -7,11 +7,13 @@
 
 'use client';
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useTransition } from 'react';
 import { useRouter } from 'next/navigation';
 import { Search, Filter, Plus, X, Phone, Mail, MessageSquare, Calendar, ChevronRight, MoreVertical, LayoutGrid, List as ListIcon } from 'lucide-react';
 import CallCockpit from './CallCockpit';
 import LeadTimeline from './LeadTimeline';
+import LeadList from './LeadList'; // Assuming this is a new component, added based on the instruction's import line
+import { recordConsent } from '@/app/actions/leads';
 
 interface Lead {
     id: string;
@@ -33,6 +35,7 @@ interface Lead {
     assignedTo: { id: string; nom: string; prenom: string } | null;
     consent: { consentGiven: boolean; legalBasis: string | null; anonymizedAt: string | null } | null;
     createdAt: string;
+    organization?: { id: string; name: string; type: string } | null;
 }
 
 interface Props {
@@ -48,6 +51,7 @@ interface Props {
     programs?: { id: string; title: string; reference: string }[];
     mode?: 'pipeline' | 'my-leads';
     organizationType?: string;
+    multiOrg?: boolean;
 }
 
 // ─── Pipeline statuses only ──────────────────────────────────
@@ -79,7 +83,7 @@ const SOURCE_LABELS: Record<string, { label: string; icon: string }> = {
 
 // ─── Component ───────────────────────────────────────────────
 
-export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commercials = [], scripts = [], programs = [], mode = 'pipeline', organizationType = 'OF_STANDARD' }: Props) {
+export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commercials = [], scripts = [], programs = [], mode = 'pipeline', organizationType = 'OF_STANDARD', multiOrg = false }: Props) {
     const router = useRouter();
     const [viewMode, setViewMode] = useState<'kanban' | 'table'>('kanban');
     const [showModal, setShowModal] = useState(false);
@@ -89,6 +93,23 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [dragOverColumn, setDragOverColumn] = useState<string | null>(null);
+    const [searchQuery, setSearchQuery] = useState('');
+    const [consentFilter, setConsentFilter] = useState<'ALL' | 'MISSING' | 'OK'>('ALL');
+    const [isPending, startTransition] = useTransition();
+
+    // Consent helper
+    const hasConsent = (lead: Lead) => lead.consent?.consentGiven === true && !lead.consent?.anonymizedAt;
+    const missingConsent = (lead: Lead) => !lead.consent || !lead.consent.consentGiven;
+    const leadsWithoutConsent = leads.filter(missingConsent).length;
+
+    const handleRecordConsent = (leadId: string) => {
+        startTransition(async () => {
+            const result = await recordConsent(leadId, true);
+            if (result.success) {
+                router.refresh();
+            }
+        });
+    };
 
     const [formData, setFormData] = useState({
         email: '', nom: '', prenom: '', telephone: '',
@@ -101,7 +122,9 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
     const filteredLeads = leads.filter(l => {
         const statusMatch = filter ? l.status === filter : true;
         const siteMatch = siteFilter === 'ALL' ? true : l.site?.id === siteFilter;
-        return statusMatch && siteMatch;
+        const searchMatch = searchQuery ? l.nom.toLowerCase().includes(searchQuery.toLowerCase()) || l.prenom.toLowerCase().includes(searchQuery.toLowerCase()) || l.email.toLowerCase().includes(searchQuery.toLowerCase()) : true;
+        const consentMatch = consentFilter === 'ALL' ? true : consentFilter === 'MISSING' ? missingConsent(l) : hasConsent(l);
+        return statusMatch && siteMatch && searchMatch && consentMatch;
     });
 
     const activeStatuses = mode === 'pipeline' ? PIPELINE_STATUSES : MY_LEADS_STATUSES;
@@ -147,6 +170,15 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
     };
 
     const handleStatusChange = useCallback(async (leadId: string, newStatus: string) => {
+        const lead = leads.find(l => l.id === leadId);
+        if (!lead) return;
+
+        // ⚠️ RGPD Guard: Bloquer le changement de statut vers RDV_PLANIFIE sans consentement
+        if (newStatus === 'RDV_PLANIFIE' && missingConsent(lead)) {
+            alert('⚠️ Impossible de planifier un RDV sans consentement RGPD.\n\nRecueillez d\'abord le consentement du prospect en cliquant sur sa fiche.');
+            return;
+        }
+
         try {
             await fetch(`/api/leads/${leadId}`, {
                 method: 'PUT',
@@ -155,7 +187,7 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
             });
             router.refresh();
         } catch { }
-    }, [router]);
+    }, [router, leads]);
 
     const handleAnonymize = async (leadId: string) => {
         if (!confirm('Anonymiser ce lead ? Cette action est irréversible (RGPD).')) return;
@@ -187,6 +219,11 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
         if (leadId) {
             const lead = leads.find(l => l.id === leadId);
             if (lead && lead.status !== newStatus) {
+                // ⚠️ RGPD Guard: Bloquer le drop vers RDV_PLANIFIE sans consentement
+                if (newStatus === 'RDV_PLANIFIE' && missingConsent(lead)) {
+                    alert('⚠️ Impossible de planifier un RDV sans consentement RGPD.\n\nRecueillez d\'abord le consentement du prospect en cliquant sur sa fiche.');
+                    return;
+                }
                 handleStatusChange(leadId, newStatus);
             }
         }
@@ -260,6 +297,13 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
                                             </div>
                                         </div>
 
+                                        {/* Multi-org badge */}
+                                        {multiOrg && lead.organization && (
+                                            <div className={`mb-1.5 px-1.5 py-0.5 rounded text-[10px] font-medium inline-flex items-center gap-1 ${lead.organization.type === 'CFA' ? 'bg-purple-500/15 text-purple-400 border border-purple-500/20' : 'bg-blue-500/15 text-blue-400 border border-blue-500/20'}`}>
+                                                {lead.organization.type === 'CFA' ? '🎓' : '🏢'} {lead.organization.name}
+                                            </div>
+                                        )}
+
                                         {/* Formation */}
                                         {lead.formationSouhaitee && (
                                             <p className="text-xs text-cyan-400/80 mb-1.5 truncate">
@@ -273,16 +317,22 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
                                             <span>{new Date(lead.createdAt).toLocaleDateString('fr-FR')}</span>
                                         </div>
 
-                                        {/* RGPD badge */}
-                                        {lead.consent && (
+                                        {/* RGPD consent badge — enhanced */}
+                                        {lead.consent?.anonymizedAt ? (
                                             <div className="mt-1.5 flex items-center gap-1">
-                                                {lead.consent.anonymizedAt ? (
-                                                    <span className="text-xs text-slate-500">🔒 Anonymisé</span>
-                                                ) : lead.consent.consentGiven ? (
-                                                    <span className="text-xs text-emerald-500">✅ RGPD OK</span>
-                                                ) : (
-                                                    <span className="text-xs text-amber-400">⚠️ Consent ?</span>
-                                                )}
+                                                <span className="text-xs text-slate-500">🔒 Anonymisé</span>
+                                            </div>
+                                        ) : hasConsent(lead) ? (
+                                            <div className="mt-1.5 flex items-center gap-1">
+                                                <span className="text-xs text-emerald-500">✅ RGPD OK</span>
+                                            </div>
+                                        ) : (
+                                            <div className="mt-1.5 px-2 py-1 bg-red-500/10 border border-red-500/30 rounded-md flex items-center gap-1.5">
+                                                <span className="relative flex h-2 w-2">
+                                                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                                    <span className="relative inline-flex rounded-full h-2 w-2 bg-red-500"></span>
+                                                </span>
+                                                <span className="text-[10px] text-red-400 font-medium">⚠️ Consentement manquant</span>
                                             </div>
                                         )}
 
@@ -326,6 +376,7 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
                         const statusCfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG['NEW'];
                         const sourceCfg = SOURCE_LABELS[lead.source] || { label: lead.source, icon: '📊' };
                         const isAnonymized = lead.consent?.anonymizedAt;
+                        const canChangeStatusToRdv = isAdmin && !(lead.status === 'RDV_PLANIFIE' && missingConsent(lead));
 
                         return (
                             <tr key={lead.id} className="hover:bg-slate-800/30 transition-colors cursor-pointer" onClick={() => setSelectedLead(lead)}>
@@ -339,6 +390,11 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
                                                 {lead.prenom} {lead.nom}
                                             </p>
                                             <p className="text-xs text-slate-400">{lead.email}</p>
+                                            {multiOrg && lead.organization && (
+                                                <span className={`text-[10px] font-medium ${lead.organization.type === 'CFA' ? 'text-purple-400' : 'text-blue-400'}`}>
+                                                    {lead.organization.type === 'CFA' ? '🎓' : '🏢'} {lead.organization.name}
+                                                </span>
+                                            )}
                                         </div>
                                     </div>
                                 </td>
@@ -359,7 +415,12 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
                                             className={`px-2 py-1 rounded text-xs font-medium border bg-transparent cursor-pointer ${statusCfg.color}`}
                                         >
                                             {activeStatuses.map(s => (
-                                                <option key={s} value={s} className="bg-slate-800 text-white">
+                                                <option
+                                                    key={s}
+                                                    value={s}
+                                                    className="bg-slate-800 text-white"
+                                                    disabled={s === 'RDV_PLANIFIE' && missingConsent(lead)}
+                                                >
                                                     {STATUS_CONFIG[s].icon} {STATUS_CONFIG[s].label}
                                                 </option>
                                             ))}
@@ -388,8 +449,8 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
                                 <td className="px-4 py-3 text-center">
                                     {isAnonymized ? (
                                         <span title="Données anonymisées (RGPD Art.17)" className="cursor-help">🔒</span>
-                                    ) : lead.consent?.consentGiven ? (
-                                        <span title={`Consentement OK — ${lead.consent.legalBasis || 'Non spécifié'}`} className="cursor-help">✅</span>
+                                    ) : hasConsent(lead) ? (
+                                        <span title={`Consentement OK — ${lead.consent?.legalBasis || 'Non spécifié'}`} className="cursor-help">✅</span>
                                     ) : (
                                         <span title="Consentement manquant" className="cursor-help text-amber-400">⚠️</span>
                                     )}
@@ -431,6 +492,7 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
         const lead = selectedLead;
         const statusCfg = STATUS_CONFIG[lead.status] || STATUS_CONFIG['NEW'];
         const sourceCfg = SOURCE_LABELS[lead.source] || { label: lead.source, icon: '📊' };
+        const isConsentMissing = missingConsent(lead);
 
         return (
             <div className="fixed inset-0 bg-black/50 backdrop-blur-sm z-50 flex justify-end" onClick={() => setSelectedLead(null)}>
@@ -467,7 +529,12 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
                                     className={`px-3 py-1.5 rounded-lg text-sm font-medium border bg-transparent cursor-pointer ${statusCfg.color}`}
                                 >
                                     {activeStatuses.map(s => (
-                                        <option key={s} value={s} className="bg-slate-800 text-white">
+                                        <option
+                                            key={s}
+                                            value={s}
+                                            className="bg-slate-800 text-white"
+                                            disabled={s === 'RDV_PLANIFIE' && isConsentMissing}
+                                        >
                                             {STATUS_CONFIG[s].icon} {STATUS_CONFIG[s].label}
                                         </option>
                                     ))}
@@ -544,19 +611,58 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
                                     <p className="text-sm text-slate-500">— Non noté</p>
                                 )}
                             </div>
-                            <div className="bg-slate-800/50 rounded-lg p-3 border border-slate-700/40">
-                                <p className="text-xs text-slate-500 mb-0.5">RGPD</p>
-                                <p className="text-sm">
-                                    {lead.consent?.anonymizedAt ? (
-                                        <span className="text-slate-500">🔒 Anonymisé</span>
-                                    ) : lead.consent?.consentGiven ? (
-                                        <span className="text-emerald-400">✅ Consentement OK</span>
-                                    ) : (
-                                        <span className="text-amber-400">⚠️ Manquant</span>
-                                    )}
-                                </p>
+                            {/* RGPD Status — Enhanced */}
+                            <div className={`rounded-lg p-3 border ${isConsentMissing ? 'bg-red-500/10 border-red-500/30' : 'bg-slate-800/50 border-slate-700/40'}`}>
+                                <p className="text-xs text-slate-500 mb-0.5">🛡️ RGPD</p>
+                                {lead.consent?.anonymizedAt ? (
+                                    <p className="text-sm text-slate-500">🔒 Anonymisé</p>
+                                ) : hasConsent(lead) ? (
+                                    <div>
+                                        <p className="text-sm text-emerald-400">✅ Consentement OK</p>
+                                        <p className="text-[10px] text-slate-500 mt-0.5">Base: {lead.consent?.legalBasis || 'consent'}</p>
+                                    </div>
+                                ) : (
+                                    <div>
+                                        <p className="text-sm text-red-400 font-medium">⚠️ Consentement manquant</p>
+                                        <p className="text-[10px] text-red-300/70 mt-0.5">Certaines actions sont bloquées (RDV, messaging)</p>
+                                        <button
+                                            onClick={() => handleRecordConsent(lead.id)}
+                                            disabled={isPending}
+                                            className="mt-2 w-full px-3 py-1.5 text-xs bg-emerald-600/20 text-emerald-400 border border-emerald-600/30 rounded-lg hover:bg-emerald-600/30 transition-colors disabled:opacity-50"
+                                        >
+                                            {isPending ? '...' : '🛡️ Enregistrer le consentement'}
+                                        </button>
+                                    </div>
+                                )}
                             </div>
                         </div>
+
+                        {/* RGPD Alert Banner (if missing consent) */}
+                        {isConsentMissing && (
+                            <div className="bg-red-500/10 border border-red-500/30 rounded-xl p-4">
+                                <div className="flex items-start gap-3">
+                                    <span className="text-2xl">🛡️</span>
+                                    <div>
+                                        <p className="text-sm font-semibold text-red-400">Consentement RGPD requis</p>
+                                        <p className="text-xs text-red-300/70 mt-1">
+                                            Ce lead n'a pas donné son consentement explicite. Les actions suivantes sont <strong>bloquées</strong> :
+                                        </p>
+                                        <ul className="text-xs text-red-300/70 mt-1 space-y-0.5 ml-4 list-disc">
+                                            <li>Planifier un RDV (passage CRM)</li>
+                                            <li>Envoi de messages WhatsApp/SMS</li>
+                                            <li>Campagnes de messaging</li>
+                                        </ul>
+                                        <button
+                                            onClick={() => handleRecordConsent(lead.id)}
+                                            disabled={isPending}
+                                            className="mt-3 px-4 py-2 text-sm bg-emerald-600 text-white rounded-lg hover:bg-emerald-500 transition-colors disabled:opacity-50 font-medium"
+                                        >
+                                            {isPending ? 'Enregistrement...' : '✅ J\'ai recueilli le consentement'}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        )}
 
                         {/* Campaign / Partner */}
                         {(lead.campaign || lead.partner) && (
@@ -588,7 +694,6 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
                             scripts={scripts}
                             onClose={() => setSelectedLead(null)}
                             onStatusChange={() => {
-                                // Simple refresh or optimistic update
                                 router.refresh();
                             }}
                         />
@@ -675,33 +780,72 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
             )}
 
             {/* View Toggle + Actions */}
-            <div className="flex items-center justify-between mb-4 gap-4">
-                <div className="flex items-center gap-2 bg-slate-800/50 rounded-lg p-1 border border-slate-700/50">
-                    <button
-                        onClick={() => setViewMode('kanban')}
-                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'kanban'
-                            ? 'bg-cyan-500/20 text-cyan-400 shadow-sm'
-                            : 'text-slate-400 hover:text-white'
-                            }`}
-                    >
-                        ▦ Kanban
-                    </button>
-                    <button
-                        onClick={() => setViewMode('table')}
-                        className={`px-3 py-1.5 rounded-md text-sm font-medium transition-all ${viewMode === 'table'
-                            ? 'bg-cyan-500/20 text-cyan-400 shadow-sm'
-                            : 'text-slate-400 hover:text-white'
-                            }`}
-                    >
-                        ☰ Tableau
-                    </button>
+            <div className="flex flex-col gap-3 mb-4">
+                {/* Consent alert bar */}
+                {leadsWithoutConsent > 0 && (
+                    <div className="px-4 py-2.5 bg-red-500/10 border border-red-500/30 rounded-xl flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                            <span className="relative flex h-2.5 w-2.5">
+                                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-red-400 opacity-75"></span>
+                                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-red-500"></span>
+                            </span>
+                            <span className="text-sm text-red-400 font-medium">
+                                🛡️ {leadsWithoutConsent} lead{leadsWithoutConsent > 1 ? 's' : ''} sans consentement RGPD
+                            </span>
+                            <span className="text-xs text-red-300/60 hidden md:inline">— RDV et messaging bloqués</span>
+                        </div>
+                        <button
+                            onClick={() => setConsentFilter(consentFilter === 'MISSING' ? 'ALL' : 'MISSING')}
+                            className={`text-xs px-3 py-1 rounded-lg transition-all ${consentFilter === 'MISSING' ? 'bg-red-500 text-white' : 'bg-red-500/20 text-red-400 hover:bg-red-500/30'}`}
+                        >
+                            {consentFilter === 'MISSING' ? '✕ Tout voir' : 'Voir les leads concernés'}
+                        </button>
+                    </div>
+                )}
 
-                    {/* Site Filter (Added) */}
+                <div className="flex items-center gap-3 flex-wrap">
+                    <div className="flex items-center bg-slate-800/60 rounded-xl border border-slate-700/50 p-1">
+                        <button
+                            onClick={() => setViewMode('kanban')}
+                            className={`px-4 py-1.5 rounded-lg text-sm transition-all ${viewMode === 'kanban'
+                                ? 'bg-blue-500/20 text-blue-400'
+                                : 'text-slate-400 hover:text-white'
+                                }`}
+                        >
+                            🎯 Kanban
+                        </button>
+                        <button
+                            onClick={() => setViewMode('table')}
+                            className={`px-4 py-1.5 rounded-lg text-sm transition-all ${viewMode === 'table'
+                                ? 'bg-blue-500/20 text-blue-400'
+                                : 'text-slate-400 hover:text-white'
+                                }`}
+                        >
+                            ≡ Tableau
+                        </button>
+                    </div>
+
+                    {/* Consent filter */}
+                    <div className="flex items-center bg-slate-800/60 rounded-xl border border-slate-700/50 p-1">
+                        <button
+                            onClick={() => setConsentFilter('ALL')}
+                            className={`px-3 py-1.5 rounded-lg text-xs transition-all ${consentFilter === 'ALL' ? 'bg-slate-600/50 text-white' : 'text-slate-400 hover:text-white'}`}
+                        >Tous</button>
+                        <button
+                            onClick={() => setConsentFilter('OK')}
+                            className={`px-3 py-1.5 rounded-lg text-xs transition-all ${consentFilter === 'OK' ? 'bg-emerald-500/20 text-emerald-400' : 'text-slate-400 hover:text-white'}`}
+                        >✅ RGPD OK</button>
+                        <button
+                            onClick={() => setConsentFilter('MISSING')}
+                            className={`px-3 py-1.5 rounded-lg text-xs transition-all ${consentFilter === 'MISSING' ? 'bg-red-500/20 text-red-400' : 'text-slate-400 hover:text-white'}`}
+                        >⚠️ Sans consent</button>
+                    </div>
+
                     {sites.length > 0 && (
                         <select
                             value={siteFilter}
-                            onChange={(e) => setSiteFilter(e.target.value)}
-                            className="bg-transparent text-slate-300 text-sm font-medium focus:outline-none focus:text-white px-2 border-l border-slate-700/50"
+                            onChange={e => setSiteFilter(e.target.value)}
+                            className="bg-slate-800/60 text-slate-300 text-sm rounded-xl border border-slate-700/50 px-3 py-1.5"
                         >
                             <option value="ALL" className="bg-slate-800">Tous les sites</option>
                             {sites.map(s => (
@@ -709,44 +853,44 @@ export default function LeadPipeline({ leads, stats, isAdmin, sites = [], commer
                             ))}
                         </select>
                     )}
-                </div>
 
-                {/* Table filter (only in table mode) */}
-                {viewMode === 'table' && (
-                    <div className="flex gap-2 flex-wrap flex-1 justify-center">
+                    {/* Table filter (only in table mode) */}
+                    {viewMode === 'table' && (
+                        <div className="flex gap-2 flex-wrap flex-1 justify-center">
+                            <button
+                                onClick={() => setFilter('')}
+                                className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${!filter ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-slate-400 hover:text-white'}`}
+                            >
+                                Tous ({filteredLeads.length})
+                            </button>
+                            {activeStatuses.map(s => {
+                                const count = stats.byStatus[s] || 0;
+                                const cfg = STATUS_CONFIG[s];
+                                return (
+                                    <button
+                                        key={s}
+                                        onClick={() => setFilter(s)}
+                                        className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${filter === s ? cfg.color + ' border' : 'text-slate-400 hover:text-white'}`}
+                                    >
+                                        {cfg.icon} {cfg.label} ({count})
+                                    </button>
+                                );
+                            })}
+                        </div>
+                    )}
+
+                    {isAdmin && (
                         <button
-                            onClick={() => setFilter('')}
-                            className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${!filter ? 'bg-cyan-500/20 text-cyan-400 border border-cyan-500/30' : 'text-slate-400 hover:text-white'}`}
+                            onClick={() => setShowModal(true)}
+                            className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-lg hover:from-cyan-600 hover:to-blue-600 transition-all shadow-lg shadow-cyan-500/20 flex items-center gap-2 whitespace-nowrap"
                         >
-                            Tous ({filteredLeads.length})
+                            <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+                            </svg>
+                            Nouveau lead
                         </button>
-                        {activeStatuses.map(s => {
-                            const count = stats.byStatus[s] || 0;
-                            const cfg = STATUS_CONFIG[s];
-                            return (
-                                <button
-                                    key={s}
-                                    onClick={() => setFilter(s)}
-                                    className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${filter === s ? cfg.color + ' border' : 'text-slate-400 hover:text-white'}`}
-                                >
-                                    {cfg.icon} {cfg.label} ({count})
-                                </button>
-                            );
-                        })}
-                    </div>
-                )}
-
-                {isAdmin && (
-                    <button
-                        onClick={() => setShowModal(true)}
-                        className="px-4 py-2 bg-gradient-to-r from-cyan-500 to-blue-500 text-white font-medium rounded-lg hover:from-cyan-600 hover:to-blue-600 transition-all shadow-lg shadow-cyan-500/20 flex items-center gap-2 whitespace-nowrap"
-                    >
-                        <svg className="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
-                        </svg>
-                        Nouveau lead
-                    </button>
-                )}
+                    )}
+                </div>
             </div>
 
             {/* Main Content */}

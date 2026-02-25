@@ -12,6 +12,7 @@ import { LeadSource, LeadStatus } from '@prisma/client';
 import { autoDispatchLead } from '@/lib/prospection/lead-dispatch';
 import { logLeadAction } from '@/lib/prospection/lead-audit';
 import { notifyLeadCreated } from '@/lib/messaging/notification-hooks';
+import { refreshLeadScore } from '@/lib/prospection/lead-scoring';
 
 /**
  * GET /api/leads
@@ -117,7 +118,6 @@ export async function POST(request: NextRequest) {
                 ville,
                 source: source || 'MANUAL',
                 campaignId,
-                score,
                 ...(siteId && { siteId }),
                 ...(assignedToId && { assignedToId }),
             },
@@ -161,6 +161,11 @@ export async function POST(request: NextRequest) {
         // Hook WhatsApp: Nouveau lead créé (async, non-blocking)
         notifyLeadCreated(organizationId, lead)
             .catch(err => console.error('[Hook] Lead created notification failed:', err));
+
+        // Scoring automatique (async, non-blocking)
+        refreshLeadScore(lead.id)
+            .then(result => console.log(`[Scoring] Lead ${lead.id} scored: ${result.score}/100 (${result.grade})`))
+            .catch(err => console.error('[Scoring] Failed:', err));
 
         return NextResponse.json({ success: true, lead }, { status: 201 });
     } catch (error) {

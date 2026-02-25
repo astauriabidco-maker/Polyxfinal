@@ -15,7 +15,8 @@ import {
     MembershipScope,
     PhaseStatus,
     TypeFinanceur,
-    NetworkType
+    NetworkType,
+    SessionStatus
 } from '@prisma/client';
 import { ROLE_IDS } from '../src/lib/constants/roles';
 import bcrypt from 'bcryptjs';
@@ -261,7 +262,7 @@ async function main() {
             dateDebut: new Date('2024-09-01'),
             dateFin: new Date('2025-06-30'),
             placesMax: 20,
-            status: PhaseStatus.ACTIF,
+            status: SessionStatus.EN_COURS,
         }
     });
 
@@ -275,7 +276,7 @@ async function main() {
             dateDebut: new Date('2024-09-15'),
             dateFin: new Date('2025-07-15'),
             placesMax: 15,
-            status: PhaseStatus.ACTIF,
+            status: SessionStatus.EN_COURS,
         }
     });
 
@@ -406,7 +407,7 @@ async function main() {
             dateDebut: new Date('2024-11-01'),
             dateFin: new Date('2024-11-08'),
             placesMax: 12,
-            status: PhaseStatus.ACTIF,
+            status: SessionStatus.EN_COURS,
         }
     });
 
@@ -420,7 +421,7 @@ async function main() {
             dateDebut: new Date('2024-11-15'),
             dateFin: new Date('2024-11-22'),
             placesMax: 10,
-            status: PhaseStatus.ACTIF,
+            status: SessionStatus.EN_COURS,
         }
     });
 
@@ -536,7 +537,7 @@ async function main() {
             dateDebut: new Date('2024-12-01'),
             dateFin: new Date('2024-12-02'),
             placesMax: 8,
-            status: PhaseStatus.ACTIF,
+            status: SessionStatus.EN_COURS,
         }
     });
 
@@ -767,7 +768,7 @@ async function main() {
             dateDebut: new Date('2024-10-01'),
             dateFin: new Date('2024-10-05'),
             placesMax: 20,
-            status: PhaseStatus.ACTIF,
+            status: SessionStatus.EN_COURS,
         }
     });
 

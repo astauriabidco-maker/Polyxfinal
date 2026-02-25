@@ -3,6 +3,7 @@
  * =========================================================================
  * Page serveur affichant les dossiers de l'organisation courante.
  * Filtre les données selon le scope d'accès aux sites de l'utilisateur.
+ * Supporte le mode multi-org via ?scope=all
  * 
  * URL: /dashboard
  */
@@ -68,7 +69,7 @@ async function evaluateCompliance(dossierId: string, currentStatus: string): Pro
     };
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: { scope?: string } }) {
     // Vérifier la session et récupérer l'organisation
     const session = await auth();
     if (!session?.user?.organizationId) {
@@ -77,21 +78,38 @@ export default async function DashboardPage() {
 
     const userId = session.user.id;
     const organizationId = session.user.organizationId;
+    const isAllOrgs = searchParams.scope === 'all';
 
-    // Obtenir les sites accessibles (null si GLOBAL, array si RESTRICTED)
-    const allowedSiteIds = await getUserSiteIds(userId, organizationId);
+    // Multi-org: récupérer toutes les orgs du user
+    const allMemberships = await prisma.membership.findMany({
+        where: { userId, isActive: true },
+        include: { organization: { select: { id: true, name: true, type: true } } },
+    });
+    const orgMap = Object.fromEntries(
+        allMemberships.map(m => [m.organization.id, { name: m.organization.name, type: m.organization.type }])
+    );
+    const orgIds = allMemberships.map(m => m.organization.id);
+    const hasMultipleOrgs = Object.keys(orgMap).length > 1;
 
-    // Construire le filtre avec accès granulaire aux sites
-    const whereClause = buildSiteFilteredWhereClause(organizationId, allowedSiteIds);
+    let whereClause: any;
 
-    // Récupérer les dossiers DE L'ORGANISATION (et éventuellement du SITE)
+    if (isAllOrgs) {
+        // Mode multi-org : pas de filtrage site, on prend tous les dossiers de toutes les orgs
+        whereClause = { organizationId: { in: orgIds } };
+    } else {
+        // Mode single-org : filtrage par site
+        const allowedSiteIds = await getUserSiteIds(userId, organizationId);
+        whereClause = buildSiteFilteredWhereClause(organizationId, allowedSiteIds);
+    }
+
+    // Récupérer les dossiers
     const dossiers = await prisma.dossier.findMany({
         where: whereClause,
         orderBy: { createdAt: 'desc' },
         include: {
-            organization: true, // Pour les règles tenant
-            company: true,      // Pour CFA
-            site: true,         // Pour Multi-Site
+            organization: true,
+            company: true,
+            site: true,
             session: {
                 include: {
                     programme: true,
@@ -103,6 +121,7 @@ export default async function DashboardPage() {
                 },
             },
         },
+        take: 200,
     });
 
     // Évaluer la conformité de chaque dossier
@@ -133,20 +152,65 @@ export default async function DashboardPage() {
                         <div className="flex items-center justify-between">
                             <div>
                                 <h1 className="text-3xl font-bold text-white">📋 Tableau de Bord</h1>
-                                <p className="text-slate-400 mt-1">Gestion des dossiers de formation</p>
+                                <p className="text-slate-400 mt-1">
+                                    {isAllOrgs
+                                        ? `Vue consolidée • ${Object.keys(orgMap).length} organisations • ${dossiers.length} dossiers`
+                                        : 'Gestion des dossiers de formation'
+                                    }
+                                </p>
                             </div>
-                            <div className="flex gap-4">
+                            <div className="flex gap-4 items-center">
+                                {/* Multi-Org Toggle */}
+                                {hasMultipleOrgs && (
+                                    <div className="flex items-center bg-slate-800/60 rounded-xl border border-slate-700/50 p-1">
+                                        <a
+                                            href="/dashboard"
+                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${!isAllOrgs
+                                                ? 'bg-cyan-500/20 text-cyan-400 shadow-sm'
+                                                : 'text-slate-400 hover:text-white'
+                                                }`}
+                                        >
+                                            🏢 Org. actuelle
+                                        </a>
+                                        <a
+                                            href="/dashboard?scope=all"
+                                            className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${isAllOrgs
+                                                ? 'bg-purple-500/20 text-purple-400 shadow-sm'
+                                                : 'text-slate-400 hover:text-white'
+                                                }`}
+                                        >
+                                            🌐 Toutes ({Object.keys(orgMap).length})
+                                        </a>
+                                    </div>
+                                )}
                                 <StatCard label="Conformes" value={conformeCount} color="emerald" />
                                 <StatCard label="Bloqués" value={bloqueCount} color="red" />
                                 <StatCard label="Total" value={dossiers.length} color="slate" />
                             </div>
                         </div>
+
+                        {/* Multi-org indicator */}
+                        {isAllOrgs && (
+                            <div className="mt-4 flex items-center gap-2 flex-wrap">
+                                {Object.entries(orgMap).map(([id, org]) => (
+                                    <span
+                                        key={id}
+                                        className={`px-2.5 py-1 rounded-full text-xs font-medium border ${org.type === 'CFA'
+                                                ? 'bg-purple-500/10 text-purple-400 border-purple-500/30'
+                                                : 'bg-blue-500/10 text-blue-400 border-blue-500/30'
+                                            }`}
+                                    >
+                                        {org.type === 'CFA' ? '🎓' : '🏢'} {org.name}
+                                    </span>
+                                ))}
+                            </div>
+                        )}
                     </header>
 
                     {/* Liste des Dossiers */}
                     <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-6">
                         {dossiersWithCompliance.map((dossier) => (
-                            <DossierCard key={dossier.id} dossier={dossier} />
+                            <DossierCard key={dossier.id} dossier={dossier} showOrg={isAllOrgs} />
                         ))}
                     </div>
 
@@ -183,9 +247,10 @@ function StatCard({ label, value, color }: { label: string; value: number; color
     );
 }
 
-function DossierCard({ dossier }: { dossier: any }) {
+function DossierCard({ dossier, showOrg = false }: { dossier: any; showOrg?: boolean }) {
     const contrat = dossier.contrats?.[0];
     const isConforme = dossier.compliance.success;
+    const orgType = dossier.organization?.type;
 
     return (
         <div className="bg-slate-800/60 backdrop-blur rounded-xl border border-slate-700/50 overflow-hidden hover:border-slate-600/50 transition-all duration-300">
@@ -196,6 +261,15 @@ function DossierCard({ dossier }: { dossier: any }) {
                         {dossier.stagiairePrenom} {dossier.stagiaireNom}
                     </h3>
                     <p className="text-sm text-slate-400">{dossier.stagiaireEmail}</p>
+                    {/* Multi-org badge */}
+                    {showOrg && dossier.organization && (
+                        <span className={`mt-1 inline-flex items-center gap-1 px-2 py-0.5 rounded text-[10px] font-medium ${orgType === 'CFA'
+                                ? 'bg-purple-500/15 text-purple-400 border border-purple-500/20'
+                                : 'bg-blue-500/15 text-blue-400 border border-blue-500/20'
+                            }`}>
+                            {orgType === 'CFA' ? '🎓' : '🏢'} {dossier.organization.name}
+                        </span>
+                    )}
                 </div>
 
                 {/* Badge de Conformité */}
@@ -261,6 +335,14 @@ function DossierCard({ dossier }: { dossier: any }) {
                     <div className="flex items-center justify-between">
                         <span className="text-sm text-slate-500">Financeur</span>
                         <span className="text-sm text-slate-300">{contrat.financeur.type}</span>
+                    </div>
+                )}
+
+                {/* Site (visible en mode multi-org) */}
+                {showOrg && dossier.site && (
+                    <div className="flex items-center justify-between">
+                        <span className="text-sm text-slate-500">Agence</span>
+                        <span className="text-sm text-slate-300">📍 {dossier.site.name}</span>
                     </div>
                 )}
             </div>

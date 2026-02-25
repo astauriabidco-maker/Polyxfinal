@@ -12,6 +12,7 @@ import { prisma } from '@/lib/prisma';
 import { LeadSource } from '@prisma/client';
 import crypto from 'crypto';
 import { autoDispatchLead } from '@/lib/prospection/lead-dispatch';
+import { refreshLeadScore } from '@/lib/prospection/lead-scoring';
 
 interface RouteParams {
     params: { source: string };
@@ -222,6 +223,11 @@ export async function POST(request: NextRequest, { params }: RouteParams) {
 
         // Auto-dispatch basé sur le code postal
         await autoDispatchLead(lead.id, organizationId, leadData.codePostal);
+
+        // Scoring automatique (async, non-blocking)
+        refreshLeadScore(lead.id)
+            .then(r => console.log(`[Scoring] Webhook lead ${lead.id} scored: ${r.score}/100 (${r.grade})`))
+            .catch(err => console.error('[Scoring] Webhook scoring failed:', err));
 
         return NextResponse.json({ success: true, leadId: lead.id }, { status: 201 });
     } catch (error) {

@@ -11,6 +11,7 @@ import { prisma } from '@/lib/prisma';
 import { Prisma } from '@prisma/client';
 import { logLeadAction } from '@/lib/prospection/lead-audit';
 import { notifyLeadQualified, notifyLeadConverted } from '@/lib/messaging/notification-hooks';
+import { refreshLeadScore } from '@/lib/prospection/lead-scoring';
 
 interface RouteParams {
     params: { id: string };
@@ -86,6 +87,13 @@ export async function PUT(request: NextRequest, { params }: RouteParams) {
                 notifyLeadConverted(organizationId, lead)
                     .catch(err => console.error('[Hook] Lead converted notification failed:', err));
             }
+        }
+
+        // Dynamic score refresh on status change (async, non-blocking)
+        if (body.status) {
+            refreshLeadScore(leadId)
+                .then(r => console.log(`[Scoring] Lead ${leadId} re-scored: ${r.score}/100 (${r.grade}) after status → ${body.status}`))
+                .catch(err => console.error('[Scoring] Refresh failed:', err));
         }
 
         return NextResponse.json({ success: true, lead });

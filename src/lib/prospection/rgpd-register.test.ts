@@ -152,18 +152,20 @@ describe('Registre RGPD Art. 30', () => {
             expect(stats.dpaPending).toBeGreaterThanOrEqual(1);
             expect(stats.dpaPendingNames).toContain('P2');
             expect(stats.totalDataCategories).toBeGreaterThan(0);
-            expect(stats.transfersOutsideEU).toBe(0);
+            // WhatsApp treatment includes 1 transfer to USA (Meta) as a static SUBPROCESSOR
+            expect(stats.transfersOutsideEU).toBe(1);
             expect(stats.dpoDesignated).toBe(false);
             expect(stats.lastUpdate).toBeTruthy();
         });
 
-        it('should report 0 subprocessors when no partners', async () => {
+        it('should report only static subprocessors when no partners', async () => {
             prismaMock.organization.findUnique.mockResolvedValue({ id: 'org-001', name: 'Test' } as any);
             prismaMock.partner.findMany.mockResolvedValue([]);
 
             const stats = await getRegisterStats('org-001');
             expect(stats.dpaPending).toBe(0);
-            expect(stats.dpaSigned).toBe(0);
+            // Meta (WhatsApp SUBPROCESSOR) always has DPA SIGNED in static treatments
+            expect(stats.dpaSigned).toBe(1);
         });
     });
 

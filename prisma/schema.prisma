@@ -63,6 +63,7 @@ model Organization {
   chatbotRules          ChatbotRule[]
   interactiveActions    InteractiveAction[]
   aiSettings            AISettings?
+  qualificationScripts  QualificationScript[]
   
   @@index([siret])
   @@index([type])
@@ -142,6 +143,7 @@ model User {
   assignedLeads     Lead[]        @relation("LeadAssignedTo")
   callLogs          CallLog[]
   messagesSent      Message[]     @relation("MessageSentBy")
+  scriptExecutions  ScriptExecution[]
 
   @@index([email])
 }
@@ -739,6 +741,18 @@ model Lead {
   dateRdv            DateTime?        // Date du RDV physique confirmé
   nextCallDate       DateTime?        // Date de prochain rappel
   lostReason         String?          // Raison de perte (si PERDU)
+  relanceCount       Int              @default(0)  // Compteur de relances effectuées
+  // === Financement ===
+  financementType    String?          // PERSONNEL, CPF, etc.
+  testVolume         Int?             // Volume horaire du test/formation
+  testTarif          Float?           // Tarif horaire ou forfait
+  montantTotal       Float?           // Montant total calculé
+  montantPaye        Float?           @default(0) // Montant déjà payé
+  factureManuelleValidee Boolean      @default(false) // Validation facture manuelle
+  dateFacture        DateTime?        // Date création facture
+  datePaiement       DateTime?        // Date du dernier paiement
+  relancePaiementCount Int            @default(0)  // Compteur relances paiement
+  dateRelancePaiement  DateTime?      // Date dernière relance paiement
   metadata           Json?
   status             LeadStatus   @default(NEW)
   score              Int?
@@ -767,6 +781,8 @@ model Lead {
   callLogs           CallLog[]
   messages           Message[]
   contactTags        ContactTag[]
+  scriptExecutions   ScriptExecution[]
+  activities         LeadActivity[]
 }
 
 model LeadConsent {
@@ -786,6 +802,23 @@ model LeadConsent {
 
   @@index([consentGiven])
   @@index([leadId])
+}
+
+/// Historique d'activité structuré pour chaque Lead (appels, relances, RDV, changements de statut...)
+model LeadActivity {
+  id          String           @id @default(cuid())
+  leadId      String
+  type        LeadActivityType
+  description String?          // Description lisible de l'activité
+  metadata    Json?            // Données complémentaires (JSONB)
+  performedBy String?          // userId de l'acteur (null = système)
+  createdAt   DateTime         @default(now())
+  updatedAt   DateTime         @updatedAt
+  lead        Lead             @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  @@index([leadId])
+  @@index([createdAt(sort: Desc)])
+  @@index([type])
 }
 
 model NetworkSettings {
@@ -1182,12 +1215,50 @@ enum LeadStatus {
   // === CRM (Post-RDV) ===
   RDV_PLANIFIE       // RDV fixé, en attente
   RDV_NON_HONORE     // RDV non honoré
+  RDV_ANNULE         // RDV annulé par le prospect ou le commercial
+  DECISION_EN_ATTENTE // Prospect présent au RDV mais reporte sa décision
+  // === Financement Personnel (Parcours A) ===
+  TEST_EN_COURS_PERSO   // Test / devis en cours (financement perso)
+  EN_ATTENTE_PAIEMENT   // Facture émise, en attente de paiement
+  INSCRIT_PERSO         // Inscrit via financement personnel (paiement reçu)
+  // === Financement CPF (Parcours B) ===
+  CPF_COMPTE_A_DEMANDER // CPF : compte à créer/demander
+  // === Existants ===
   COURRIERS_ENVOYES  // Courriers/Documents envoyés
   COURRIERS_RECUS    // Courriers/Documents reçus
   NEGOCIATION        // En discussion
   CONVERTI           // Inscription validée → création Dossier
   PROBLEMES_SAV      // Problèmes / SAV
   PERDU              // Abandonné (avec raison)
+}
+
+/// Types d'activité pour le journal LeadActivity
+enum LeadActivityType {
+  CALL_OUTBOUND      // Appel sortant
+  CALL_INBOUND       // Appel entrant
+  CALL_NO_ANSWER     // Appel sans réponse
+  EMAIL_SENT         // Email envoyé
+  SMS_SENT           // SMS envoyé
+  WHATSAPP_SENT      // Message WhatsApp envoyé
+  RDV_BOOKED         // RDV planifié
+  RDV_COMPLETED      // RDV effectué
+  RDV_CANCELLED      // RDV annulé
+  RDV_NO_SHOW        // RDV non honoré
+  STATUS_CHANGE      // Changement de statut
+  RELANCE            // Relance effectuée
+  NOTE_ADDED         // Note ajoutée
+  DOCUMENT_SENT      // Document envoyé
+  DOCUMENT_RECEIVED  // Document reçu
+  ASSIGNMENT_CHANGE  // Réassignation du lead
+  SCORE_UPDATE       // Mise à jour du score
+  SYSTEM_EVENT       // Action système automatique
+  // === Financement ===
+  FINANCEMENT_CHOISI // Type de financement sélectionné
+  TEST_SUBMITTED     // Test / volume soumis
+  FACTURE_VALIDEE    // Facture manuelle validée
+  PAIEMENT_RECU      // Paiement reçu
+  RELANCE_PAIEMENT   // Relance paiement envoyée
+  ARCHIVE_NON_PAIEMENT // Archivé pour non-paiement
 }
 
 enum NetworkType {
@@ -1263,6 +1334,123 @@ model CallLog {
   @@index([callerId])
   @@index([outcome])
   @@index([createdAt])
+}
+
+// ═══════════════════════════════════════════════════════════════
+// QUALIFICATION SCRIPTS — Arbre décisionnel intelligent
+// ═══════════════════════════════════════════════════════════════
+
+/// Types de nœuds dans l'arbre décisionnel
+enum ScriptNodeType {
+  YES_NO      // Oui/Non → branchement
+  CHOICE      // Choix multiple → branchement par option
+  OPEN_TEXT   // Texte libre (notes, commentaires)
+  RATING      // Notation 1-5
+  INFO        // Information affichée, pas d'input
+}
+
+/// Catégorie de script
+enum ScriptCategory {
+  OF_STANDARD    // Organisme de Formation standard
+  CFA            // Centre de Formation d'Apprentis
+  B2B            // Prospects entreprises
+  B2C            // Prospects particuliers
+  CUSTOM         // Personnalisé
+}
+
+/// Template de script de qualification (le conteneur)
+model QualificationScript {
+  id              String          @id @default(cuid())
+  organizationId  String
+  name            String          // "Script OF Standard", "Script CFA Apprentissage"
+  description     String?
+  category        ScriptCategory  @default(OF_STANDARD)
+  isActive        Boolean         @default(true)
+  isDefault       Boolean         @default(false)   // Script par défaut pour l'organisation
+  version         Int             @default(1)
+  rootNodeId      String?         // ID du premier nœud de l'arbre
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  organization    Organization    @relation(fields: [organizationId], references: [id])
+  nodes           ScriptNode[]
+  executions      ScriptExecution[]
+
+  @@index([organizationId])
+  @@index([category])
+}
+
+/// Nœud de l'arbre décisionnel (une question / étape)
+model ScriptNode {
+  id              String          @id @default(cuid())
+  scriptId        String
+  question        String          // Le texte de la question
+  helpText        String?         // Aide / guidance pour le commercial
+  type            ScriptNodeType  @default(YES_NO)
+  ordre           Int             @default(0)
+  isRequired      Boolean         @default(true)
+  scoreWeight     Int             @default(0)        // Points ajoutés au score pour réponse positive
+
+  // Branchement conditionnel
+  // Pour YES_NO : yesNextNodeId / noNextNodeId
+  // Pour CHOICE : les options sont dans le champ 'options' (JSON)
+  //   Exemple: [{"value":"CPF","label":"CPF","nextNodeId":"xyz","scoreImpact":5}]
+  options         Json?           // Options pour CHOICE type
+  yesNextNodeId   String?         // YES_NO → next si Oui
+  noNextNodeId    String?         // YES_NO → next si Non
+  defaultNextId   String?         // Fallback / next pour OPEN_TEXT, RATING
+
+  // Déclencheurs d'action automatique
+  // Exemple: {"type":"SUGGEST_RDV","condition":"yes"} ou {"type":"FLAG_COLD","condition":"no"}
+  actionTrigger   Json?
+
+  createdAt       DateTime        @default(now())
+
+  script          QualificationScript @relation(fields: [scriptId], references: [id], onDelete: Cascade)
+  responses       ScriptResponse[]
+
+  @@index([scriptId])
+  @@index([scriptId, ordre])
+}
+
+/// Exécution d'un script (une session complète pour un lead)
+model ScriptExecution {
+  id                String          @id @default(cuid())
+  scriptId          String
+  leadId            String
+  userId            String          // Le commercial qui exécute
+  startedAt         DateTime        @default(now())
+  completedAt       DateTime?
+  totalScore        Int             @default(0)
+  maxPossibleScore  Int             @default(0)
+  scorePercentage   Float?          // totalScore / maxPossibleScore * 100
+  recommendation    String?         // Suggestion auto (ex: "Lead chaud → proposer RDV")
+  recommendedAction String?         // Action à suggérer (BOOK_RDV, FOLLOW_UP, DISQUALIFY)
+
+  script            QualificationScript @relation(fields: [scriptId], references: [id])
+  lead              Lead                @relation(fields: [leadId], references: [id], onDelete: Cascade)
+  user              User                @relation(fields: [userId], references: [id])
+  responses         ScriptResponse[]
+
+  @@index([leadId])
+  @@index([scriptId])
+  @@index([userId])
+}
+
+/// Réponse enregistrée pour chaque nœud dans une exécution
+model ScriptResponse {
+  id              String          @id @default(cuid())
+  executionId     String
+  nodeId          String
+  answer          String          // La réponse effective ("oui", "non", choix, texte libre, "4/5")
+  scoreEarned     Int             @default(0)
+  answeredAt      DateTime        @default(now())
+
+  execution       ScriptExecution @relation(fields: [executionId], references: [id], onDelete: Cascade)
+  node            ScriptNode      @relation(fields: [nodeId], references: [id])
+
+  @@index([executionId])
+  @@index([nodeId])
 }
 
 // ═══════════════════════════════════════════════════════════════
